@@ -29,6 +29,7 @@ import { dateLabel } from "@/lib/dates";
 import { fmt } from "@/lib/format";
 import { prepareImage, type PreparedImage } from "@/lib/image";
 import { recentFoods } from "@/lib/nutrition";
+import { useSession } from "@/lib/session";
 import { addFoods, useAppData, useSelectedDate } from "@/lib/store";
 import { toast } from "@/lib/toast";
 import { MEALS, mealForHour, mealLabel, type FoodSource, type MealType } from "@/lib/types";
@@ -427,8 +428,10 @@ function useAnalysis() {
 }
 
 function AnalysisError({ error, status }: { error: string | null; status: number }): ReactNode {
+  const session = useSession();
   if (!error) return null;
-  const needsCode = status === 401 || status === 503;
+  // En modo local el código de acceso se escribe en Perfil.
+  const needsCode = session.status === "local" && (status === 401 || status === 503);
   return (
     <div role="alert" className="flex gap-2 rounded-2xl bg-danger-soft p-3 text-sm text-danger-text">
       <TriangleAlert className="mt-0.5 size-4 shrink-0" />
