@@ -17,21 +17,46 @@ App personal (estilo Fitia) para registrar lo que comes con una foto y las calor
 - **Progreso:** calorías por día (7 o 30 días), peso y días dentro de la meta.
 - **Se instala en el celular** (Compartir → "Agregar a inicio" en iPhone).
 
-Los datos se guardan **en el dispositivo** (localStorage), sin cuentas. Desde Perfil puedes exportar o importar un respaldo JSON.
+## Cuentas para la familia
+
+Con una base de datos conectada, cada persona crea su cuenta (usuario y contraseña) y sus
+registros se guardan en la nube: no se pierden al cambiar de celular y cada uno ve solo lo suyo.
+
+- Para crear una cuenta se pide el **código familiar** (`APP_ACCESS_CODE`).
+- La **primera cuenta** que se crea administra la familia. Desde **Perfil → Familia** puede
+  compartir la invitación, dar una contraseña nueva a quien la olvidó y eliminar cuentas.
+- Cada persona tiene un máximo diario de análisis con IA (40 por defecto) para no agotar la
+  cuota gratuita de Gemini de toda la familia.
+- Si antes usaste la app sin cuenta, al entrar aparece la opción de pasar esos registros a tu
+  cuenta.
+
+Sin base de datos la app funciona en **modo local**: todo se guarda solo en el dispositivo
+(localStorage) y desde Perfil puedes exportar o importar un respaldo.
 
 ## Publicar en Vercel
 
 1. En [vercel.com/new](https://vercel.com/new), importa el repositorio `dash-ciclo-pedido`.
 2. En **Root Directory** elige `calorias-app`. Next.js se detecta solo.
 3. En **Environment Variables** agrega:
-   - `GEMINI_API_KEY`: key gratuita de [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (solo necesitas una cuenta de Google).
-   - `APP_ACCESS_CODE`: un código que inventes. La app lo pide para usar la IA, así nadie más gasta tu cuota con tu link.
+   - `GEMINI_API_KEY`: key gratuita de [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+   - `APP_ACCESS_CODE`: el código familiar que inventes.
 4. Pulsa **Deploy**.
-5. Abre el link, ve a **Perfil → Conexión con la IA** y escribe tu código.
 
-Opcional: `GEMINI_MODEL` para usar otro modelo de Gemini (por defecto `gemini-flash-latest`).
+### Activar las cuentas (base de datos gratis)
 
-La capa gratuita de Gemini tiene límites por minuto y por día (de sobra para uso personal). Google puede usar lo que envías en la capa gratuita para mejorar sus productos: no subas fotos que no quieras compartir.
+1. En el proyecto de Vercel entra a **Storage** → **Create Database** → **Upstash for Redis**
+   (plan **Free**).
+2. Conéctala al proyecto `calorias-app` (todas las opciones marcadas). Vercel agrega solo las
+   variables `KV_REST_API_URL` y `KV_REST_API_TOKEN`.
+3. En **Deployments**, abre el menú **⋯** del último despliegue y elige **Redeploy**.
+4. Abre la app y crea tu cuenta primero (así quedas como administrador).
+
+Opcional: `GEMINI_MODEL` para cambiar el modelo principal (por defecto `gemini-flash-latest`;
+si está saturado se usa `gemini-flash-lite-latest`) y `AI_DAILY_LIMIT` para el máximo diario
+de análisis por persona.
+
+La capa gratuita de Gemini tiene límites por minuto y por día. Google puede usar lo que envías
+en la capa gratuita para mejorar sus productos: no subas fotos que no quieras compartir.
 
 ## Desarrollo local
 
@@ -39,10 +64,15 @@ La capa gratuita de Gemini tiene límites por minuto y por día (de sobra para u
 cd calorias-app
 cp .env.example .env.local   # completa GEMINI_API_KEY
 npm install
-npm run dev                  # http://localhost:3000
+npm run dev                  # http://localhost:3000 (modo local)
 ```
 
-En local, `APP_ACCESS_CODE` es opcional.
+Para probar las cuentas sin crear una base real hay un servidor que imita a Upstash:
+
+```bash
+node scripts/mock-upstash.mjs
+KV_REST_API_URL=http://127.0.0.1:8079 KV_REST_API_TOKEN=dev APP_ACCESS_CODE=familia npm run dev
+```
 
 ## Estructura
 
@@ -50,6 +80,9 @@ En local, `APP_ACCESS_CODE` es opcional.
 - `src/app/agregar/`: agregar comida (foto, texto, manual, recientes).
 - `src/app/ejercicio/`: agregar ejercicio (captura, actividad, pasos, manual).
 - `src/app/progreso/`, `src/app/perfil/`: progreso y perfil.
-- `src/app/api/analyze/route.ts`: llamada a Gemini con salida JSON estructurada. Es el único código de servidor.
+- `src/app/bienvenida/`, `src/app/entrar/`, `src/app/registro/`, `src/app/familia/`: inicio, acceso y administración de la familia.
+- `src/app/api/analyze/route.ts`: llamada a Gemini con salida JSON estructurada.
+- `src/app/api/{session,auth,data,family}/`: cuentas y datos en la base (`src/server/`).
+- `src/lib/store.ts`, `src/lib/session.ts`: datos en el navegador y sincronización con la cuenta.
 - `src/lib/ocr.ts`, `src/lib/activity-text.ts`: OCR de capturas de actividad (Tesseract.js, en el navegador). `npm run build` copia el motor a `public/ocr` con `scripts/copy-ocr-assets.mjs`.
 - `src/lib/`: almacenamiento local, cálculos nutricionales, tabla MET y utilidades.

@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { ChartColumn, House, UserRound } from "lucide-react";
 import { cx } from "./ui";
 
+const HIDDEN = ["/agregar", "/ejercicio", "/bienvenida", "/entrar", "/registro", "/familia"];
+
 const TABS = [
   { href: "/", label: "Hoy", Icon: House },
   { href: "/progreso", label: "Progreso", Icon: ChartColumn },
@@ -13,8 +15,8 @@ const TABS = [
 
 export function BottomNav() {
   const pathname = usePathname();
-  // Las pantallas de registro tienen su propio botón de volver.
-  if (pathname.startsWith("/agregar") || pathname.startsWith("/ejercicio")) return null;
+  // Las pantallas de registro, de acceso y de familia tienen su propio botón de volver.
+  if (HIDDEN.some((p) => pathname.startsWith(p))) return null;
 
   return (
     <nav

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Camera, ChevronLeft, ChevronRight, Minus, Plus, Target } from "lucide-react";
 import { ExerciseEditSheet, FoodEditSheet } from "@/components/EditSheets";
+import { LegacyDataCard } from "@/components/LegacyDataCard";
 import { CalorieRing, Meter } from "@/components/Meters";
 import { Card, cx } from "@/components/ui";
 import { addDays, dateLabel, longDate, todayStr } from "@/lib/dates";
@@ -32,6 +33,7 @@ export default function TodayPage() {
     <>
       <DateNav date={date} />
       <main className="space-y-4 px-4">
+        <LegacyDataCard />
         {!data.profile ? <ProfileCallout /> : null}
 
         <Card>

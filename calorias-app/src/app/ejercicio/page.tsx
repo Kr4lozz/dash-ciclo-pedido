@@ -21,6 +21,7 @@ import { ApiError, readActivity } from "@/lib/api";
 import { dateLabel } from "@/lib/dates";
 import { fmt, parseNum } from "@/lib/format";
 import { prepareImage, type PreparedImage } from "@/lib/image";
+import { useSession } from "@/lib/session";
 import { ocrActivity } from "@/lib/ocr";
 import { addExercise, updateExercise, useAppData, useSelectedDate, type NewExercise } from "@/lib/store";
 import { toast } from "@/lib/toast";
@@ -91,6 +92,7 @@ export default function EjercicioPage() {
 
 function ScreenshotMode({ date }: { date: string }) {
   const router = useRouter();
+  const session = useSession();
   const data = useAppData();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<PreparedImage | null>(null);
@@ -226,7 +228,7 @@ function ScreenshotMode({ date }: { date: string }) {
           <TriangleAlert className="mt-0.5 size-4 shrink-0" />
           <p>
             {error.message}{" "}
-            {error.status === 401 || error.status === 503 ? (
+            {session.status === "local" && (error.status === 401 || error.status === 503) ? (
               <Link href="/perfil#conexion" className="font-semibold underline">
                 Ir a Perfil
               </Link>

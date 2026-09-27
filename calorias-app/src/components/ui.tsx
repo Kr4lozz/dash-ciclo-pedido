@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import { ChevronLeft, Eye, EyeOff } from "lucide-react";
+import { useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 
 export function cx(...parts: (string | false | null | undefined)[]) {
   return parts.filter(Boolean).join(" ");
@@ -31,21 +31,38 @@ const variants: Record<Variant, string> = {
   danger: "bg-danger-soft text-danger-text hover:brightness-95 disabled:opacity-50",
 };
 
+export function buttonClass(variant: Variant = "primary", className?: string) {
+  return cx(
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 text-[15px] font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+    variants[variant],
+    className,
+  );
+}
+
 export function Button({
   variant = "primary",
   className,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
+  return <button type="button" {...props} className={buttonClass(variant, className)} />;
+}
+
+/** Enlace con aspecto de botón. */
+export function ButtonLink({
+  href,
+  variant = "primary",
+  className,
+  children,
+}: {
+  href: string;
+  variant?: Variant;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <button
-      type="button"
-      {...props}
-      className={cx(
-        "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 text-[15px] font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
-        variants[variant],
-        className,
-      )}
-    />
+    <Link href={href} className={buttonClass(variant, className)}>
+      {children}
+    </Link>
   );
 }
 
@@ -164,5 +181,48 @@ export function Swatch({ color, className }: { color: string; className?: string
       className={cx("inline-block size-2.5 shrink-0 rounded-full", className)}
       style={{ background: color }}
     />
+  );
+}
+
+/** Contraseña con botón para mostrarla (útil al escribir en el celular). */
+export function PasswordInput(props: InputHTMLAttributes<HTMLInputElement>) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        {...props}
+        type={visible ? "text" : "password"}
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+        className={cx(inputClass, "pr-12", props.className)}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+        className="absolute inset-y-0 right-1 grid w-10 place-items-center text-muted hover:text-ink"
+      >
+        {visible ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+      </button>
+    </div>
+  );
+}
+
+/** Campo de contraseña con su etiqueta (el botón de mostrar queda fuera del <label>). */
+export function PasswordField({
+  label,
+  hint,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: ReactNode }) {
+  const id = useId();
+  return (
+    <div>
+      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-ink-2">
+        {label}
+      </label>
+      <PasswordInput id={id} {...props} />
+      {hint ? <span className="mt-1 block text-xs text-muted">{hint}</span> : null}
+    </div>
   );
 }

@@ -1,5 +1,4 @@
 import { ApiError, GoogleGenAI, type Part } from "@google/genai";
-import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import {
   ActivityReadingSchema,
@@ -8,14 +7,23 @@ import {
   type ActivityReading,
   type Analysis,
 } from "@/lib/analysis";
+import { currentUser } from "@/server/auth";
+import { json, safeEqual } from "@/server/http";
+import { db, keys, storageEnabled } from "@/server/kv";
 
 export const maxDuration = 60;
 
-// "gemini-flash-latest" apunta siempre al Flash más reciente (disponible en la capa gratuita).
-// Si el alias dejara de existir, se prueba el siguiente modelo de la lista.
+// Alias que Google mantiene apuntando al modelo más reciente de cada familia (capa gratuita).
+// Si el principal está saturado (503), sin cuota (429) o ya no existe (404), se usa el siguiente.
 const MODELS = [
-  ...new Set([process.env.GEMINI_MODEL?.trim() || "gemini-flash-latest", "gemini-2.5-flash"]),
+  ...new Set([
+    process.env.GEMINI_MODEL?.trim() || "gemini-flash-latest",
+    "gemini-flash-lite-latest",
+  ]),
 ];
+
+/** Errores de Gemini por los que vale la pena probar con otro modelo. */
+const RETRYABLE = new Set([404, 429, 500, 503, 504]);
 
 const FOOD_PROMPT = `Eres un nutricionista que estima calorías y macronutrientes de comidas para el diario de alimentación personal de un usuario. Recibirás una foto de su comida, una descripción en texto, o ambas.
 
@@ -39,11 +47,27 @@ const ACTIVITY_PROMPT = `Lees capturas de pantalla de apps de actividad física 
 
 Escribe notes en español.`;
 
-function json(body: unknown, status = 200) {
-  return Response.json(body, { status });
-}
+/** Análisis por persona y día, para que nadie agote la cuota gratuita de toda la familia. */
+const AI_DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT) || 40;
 
-function accessError(req: Request): Response | null {
+/**
+ * Con cuentas: hace falta haber entrado y se cuenta el uso diario.
+ * Sin base de datos (modo local): se pide el código de acceso en la cabecera.
+ */
+async function accessError(req: Request, count = false): Promise<Response | null> {
+  if (storageEnabled()) {
+    const user = await currentUser();
+    if (!user) return json({ error: "Tu sesión terminó. Vuelve a entrar para usar la IA." }, 401);
+    if (count) {
+      const key = keys.ai(user.id, new Date().toISOString().slice(0, 10));
+      const used = await db().incr(key);
+      if (used === 1) await db().expire(key, 2 * 24 * 60 * 60);
+      if (used > AI_DAILY_LIMIT) {
+        return json({ error: `Llegaste al límite de ${AI_DAILY_LIMIT} análisis por hoy. Mañana se renueva.` }, 429);
+      }
+    }
+    return null;
+  }
   const expected = process.env.APP_ACCESS_CODE?.trim();
   if (!expected) {
     // En local se permite sin código; en Vercel el enlace es público y cualquiera gastaría tu cuota.
@@ -51,9 +75,7 @@ function accessError(req: Request): Response | null {
       ? json({ error: "Falta configurar APP_ACCESS_CODE en las variables de entorno de Vercel." }, 503)
       : null;
   }
-  const given = Buffer.from(req.headers.get("x-access-code")?.trim() ?? "");
-  const wanted = Buffer.from(expected);
-  if (given.length !== wanted.length || !timingSafeEqual(given, wanted)) {
+  if (!safeEqual(req.headers.get("x-access-code")?.trim() ?? "", expected)) {
     return json({ error: "Código de acceso incorrecto. Revísalo en Perfil → Conexión con la IA." }, 401);
   }
   return null;
@@ -63,14 +85,14 @@ const MISSING_KEY = "Falta configurar GEMINI_API_KEY en el servidor.";
 
 /** Comprueba la configuración y el código de acceso sin llamar a la IA. */
 export async function GET(req: Request) {
-  const denied = accessError(req);
+  const denied = await accessError(req);
   if (denied) return denied;
   if (!process.env.GEMINI_API_KEY) return json({ error: MISSING_KEY }, 503);
   return json({ ok: true, model: MODELS[0] });
 }
 
 export async function POST(req: Request) {
-  const denied = accessError(req);
+  const denied = await accessError(req, true);
   if (denied) return denied;
   if (!process.env.GEMINI_API_KEY) return json({ error: MISSING_KEY }, 503);
 
@@ -143,8 +165,8 @@ async function generate<T extends z.ZodType>(
       if (!text) throw new BlockedError(res.promptFeedback?.blockReason ?? "sin respuesta");
       return schema.parse(JSON.parse(text));
     } catch (err) {
-      // Modelo inexistente: probar el siguiente de la lista.
-      if (err instanceof ApiError && err.status === 404) {
+      if (err instanceof ApiError && RETRYABLE.has(err.status)) {
+        console.warn(`Gemini ${model} respondió ${err.status}; probando otro modelo.`);
         lastError = err;
         continue;
       }
@@ -162,6 +184,9 @@ function errorResponse(err: unknown): Response {
         { error: "Llegaste al límite gratuito de Gemini. Espera un minuto (o hasta mañana si es el límite diario)." },
         429,
       );
+    }
+    if (err.status === 503) {
+      return json({ error: "Gemini está saturado en este momento. Intenta de nuevo en un minuto." }, 503);
     }
     if (err.status === 401 || err.status === 403 || /api key/i.test(err.message)) {
       return json({ error: "La GEMINI_API_KEY no es válida o no tiene permisos." }, 502);
