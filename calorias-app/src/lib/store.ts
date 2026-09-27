@@ -15,6 +15,7 @@ import { toast } from "./toast";
 import {
   MEALS,
   type AppData,
+  type DayBurn,
   type ExerciseEntry,
   type FoodEntry,
   type FoodSource,
@@ -35,6 +36,7 @@ const EMPTY: AppData = {
   foods: [],
   exercises: [],
   water: {},
+  burned: {},
   weights: [],
 };
 
@@ -283,6 +285,22 @@ export function setWater(date: string, ml: number) {
   });
 }
 
+// ---------- Calorías quemadas según el reloj ----------
+
+/** Guarda lo que marca Apple Fitness para el día; null en ambos valores lo borra. */
+export function setBurned(date: string, burn: DayBurn) {
+  const clean = normalizeBurn(burn);
+  update(
+    (d) => {
+      const burned = { ...d.burned };
+      if (clean) burned[date] = clean;
+      else delete burned[date];
+      return { ...d, burned };
+    },
+    { days: [date] },
+  );
+}
+
 // ---------- Perfil y peso ----------
 
 export function saveProfile(p: Profile) {
@@ -346,6 +364,8 @@ export function resetData() {
 export interface LegacySummary {
   foods: number;
   exercises: number;
+  /** días con calorías de Apple Fitness */
+  burned: number;
   weights: number;
   profile: boolean;
 }
@@ -359,10 +379,12 @@ export function legacySummary(): LegacySummary | null {
   const summary = {
     foods: d.foods.length,
     exercises: d.exercises.length,
+    burned: Object.keys(d.burned).length,
     weights: d.weights.length,
     profile: d.profile !== null,
   };
-  return summary.foods || summary.exercises || summary.weights || summary.profile ? summary : null;
+  const any = summary.foods || summary.exercises || summary.burned || summary.weights || summary.profile;
+  return any ? summary : null;
 }
 
 /** Suma a la cuenta lo que había en este celular (sin pisar lo que ya tiene la cuenta). */
@@ -375,8 +397,14 @@ export function migrateLegacyData() {
   const foods = legacy.foods.filter((f) => !foodIds.has(f.id));
   const exercises = legacy.exercises.filter((e) => !exerciseIds.has(e.id));
   const waterDates = Object.keys(legacy.water).filter((d) => !data.water[d]);
+  const burnedDates = Object.keys(legacy.burned).filter((d) => !data.burned[d]);
   const weightDates = new Set(data.weights.map((w) => w.date));
-  const days = new Set([...foods.map((f) => f.date), ...exercises.map((e) => e.date), ...waterDates]);
+  const days = new Set([
+    ...foods.map((f) => f.date),
+    ...exercises.map((e) => e.date),
+    ...waterDates,
+    ...burnedDates,
+  ]);
   const takeProfile = !data.profile && legacy.profile !== null;
 
   update(
@@ -386,6 +414,7 @@ export function migrateLegacyData() {
       foods: [...d.foods, ...foods],
       exercises: [...d.exercises, ...exercises],
       water: { ...legacy.water, ...Object.fromEntries(Object.entries(d.water).filter(([, ml]) => ml > 0)) },
+      burned: { ...legacy.burned, ...d.burned },
       weights: [...d.weights, ...legacy.weights.filter((w) => !weightDates.has(w.date))].sort((a, b) =>
         a.date.localeCompare(b.date),
       ),
@@ -451,7 +480,12 @@ function groupByDay(): Map<string, DayDoc> {
   const day = (date: string) => {
     let doc = days.get(date);
     if (!doc) {
-      doc = { foods: [], exercises: [], water: data.water[date] ?? 0 };
+      doc = {
+        foods: [],
+        exercises: [],
+        water: data.water[date] ?? 0,
+        burned: data.burned[date] ?? null,
+      };
       days.set(date, doc);
     }
     return doc;
@@ -459,6 +493,7 @@ function groupByDay(): Map<string, DayDoc> {
   for (const f of data.foods) day(f.date).foods.push(f);
   for (const e of data.exercises) day(e.date).exercises.push(e);
   for (const [date, ml] of Object.entries(data.water)) if (ml > 0) day(date);
+  for (const date of Object.keys(data.burned)) day(date);
   return days;
 }
 
@@ -589,6 +624,7 @@ function mergeRemote(server: ServerData): AppData {
     foods: Object.values(days).flatMap((d) => d.foods ?? []),
     exercises: Object.values(days).flatMap((d) => d.exercises ?? []),
     water: Object.fromEntries(Object.entries(days).map(([date, d]) => [date, d.water ?? 0])),
+    burned: Object.fromEntries(Object.entries(days).map(([date, d]) => [date, d.burned ?? null])),
   });
   // Lo que todavía no se envió manda sobre lo que hay en el servidor.
   const localDays = new Set(
@@ -600,6 +636,10 @@ function mergeRemote(server: ServerData): AppData {
   ];
   const water = Object.fromEntries(Object.entries(remote.water).filter(([d]) => !localDays.has(d)));
   for (const d of localDays) if (data.water[d]) water[d] = data.water[d];
+  const burned = Object.fromEntries(
+    Object.entries(remote.burned).filter(([d]) => !localDays.has(d)),
+  );
+  for (const d of localDays) if (data.burned[d]) burned[d] = data.burned[d];
   return {
     version: 1,
     profile: pending.has("profile") ? data.profile : remote.profile,
@@ -607,6 +647,7 @@ function mergeRemote(server: ServerData): AppData {
     foods: keepLocal(remote.foods, data.foods),
     exercises: keepLocal(remote.exercises, data.exercises),
     water,
+    burned,
   };
 }
 
@@ -749,6 +790,17 @@ function normalizeProfile(v: unknown): Profile | null {
   };
 }
 
+function normalizeBurn(v: unknown): DayBurn | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const kcal = (x: unknown) => {
+    const n = Math.round(num(x));
+    return n > 0 ? Math.min(20000, n) : null;
+  };
+  const burn = { total: kcal(o.total), active: kcal(o.active) };
+  return burn.total === null && burn.active === null ? null : burn;
+}
+
 function normalizeData(raw: unknown): AppData {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const list = (v: unknown) => (Array.isArray(v) ? v : []);
@@ -757,6 +809,13 @@ function normalizeData(raw: unknown): AppData {
     for (const [k, v] of Object.entries(o.water as Record<string, unknown>)) {
       const ml = Math.min(20000, Math.max(0, Math.round(num(v))));
       if (isValidDateStr(k) && ml > 0) water[k] = ml;
+    }
+  }
+  const burned: Record<string, DayBurn> = {};
+  if (o.burned && typeof o.burned === "object") {
+    for (const [k, v] of Object.entries(o.burned as Record<string, unknown>)) {
+      const burn = normalizeBurn(v);
+      if (isValidDateStr(k) && burn) burned[k] = burn;
     }
   }
   const weights = list(o.weights)
@@ -775,6 +834,7 @@ function normalizeData(raw: unknown): AppData {
       .map(normalizeExercise)
       .filter((e): e is ExerciseEntry => e !== null),
     water,
+    burned,
     weights,
   };
 }

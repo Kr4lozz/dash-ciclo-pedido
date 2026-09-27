@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Camera, ChevronLeft, ChevronRight, Minus, Plus, Target } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Minus, Plus, Target, Watch } from "lucide-react";
+import { BalanceCard, BurnSheet } from "@/components/DayBalance";
 import { ExerciseEditSheet, FoodEditSheet } from "@/components/EditSheets";
 import { LegacyDataCard } from "@/components/LegacyDataCard";
 import { CalorieRing, Meter } from "@/components/Meters";
 import { Card, cx } from "@/components/ui";
 import { addDays, dateLabel, longDate, todayStr } from "@/lib/dates";
 import { fmt, fmt1 } from "@/lib/format";
-import { computeTargets, sumExercises, sumFoods } from "@/lib/nutrition";
+import { computeTargets, dayActivity, sumFoods } from "@/lib/nutrition";
 import { useSession } from "@/lib/session";
 import { setSelectedDate, setWater, useAppData, useSelectedDate } from "@/lib/store";
 import { MEALS, type ExerciseEntry, type FoodEntry, type MealType } from "@/lib/types";
@@ -20,6 +21,7 @@ export default function TodayPage() {
   const date = useSelectedDate();
   const [editingFood, setEditingFood] = useState<FoodEntry | null>(null);
   const [editingExercise, setEditingExercise] = useState<ExerciseEntry | null>(null);
+  const [editingBurn, setEditingBurn] = useState(false);
 
   const targets = useMemo(() => computeTargets(data.profile), [data.profile]);
   const foods = useMemo(() => data.foods.filter((f) => f.date === date), [data.foods, date]);
@@ -28,7 +30,8 @@ export default function TodayPage() {
     [data.exercises, date],
   );
   const totals = sumFoods(foods);
-  const burned = sumExercises(exercises);
+  const burn = data.burned[date] ?? null;
+  const burned = dayActivity(burn, exercises);
   const water = data.water[date] ?? 0;
 
   return (
@@ -51,6 +54,15 @@ export default function TodayPage() {
           <CalorieRing goal={targets.calories} consumed={totals.calories} burned={burned} />
         </Card>
 
+        <BalanceCard
+          targets={targets}
+          goal={data.profile?.goal ?? null}
+          eaten={totals.calories}
+          burn={burn}
+          exercises={exercises}
+          onEdit={() => setEditingBurn(true)}
+        />
+
         <Card className="space-y-3.5">
           <h2 className="font-semibold">Macronutrientes</h2>
           <Meter label="Proteína" value={totals.protein} max={targets.protein} color="var(--protein)" />
@@ -69,7 +81,13 @@ export default function TodayPage() {
           />
         ))}
 
-        <ExerciseCard entries={exercises} burned={burned} onEdit={setEditingExercise} />
+        <ExerciseCard
+          entries={exercises}
+          burned={burned}
+          appleActive={burn?.active ?? null}
+          onEdit={setEditingExercise}
+          onEditApple={() => setEditingBurn(true)}
+        />
 
         <Card className="space-y-3">
           <h2 className="font-semibold">💧 Agua</h2>
@@ -105,6 +123,13 @@ export default function TodayPage() {
 
       <FoodEditSheet entry={editingFood} onClose={() => setEditingFood(null)} />
       <ExerciseEditSheet entry={editingExercise} onClose={() => setEditingExercise(null)} />
+      <BurnSheet
+        open={editingBurn}
+        onClose={() => setEditingBurn(false)}
+        date={date}
+        burn={burn}
+        bmr={targets.hasProfile ? targets.bmr : null}
+      />
     </>
   );
 }
@@ -217,11 +242,16 @@ function MealCard({
 function ExerciseCard({
   entries,
   burned,
+  appleActive,
   onEdit,
+  onEditApple,
 }: {
   entries: ExerciseEntry[];
+  /** Total que cuenta para el día (Apple Fitness o suma de registros) */
   burned: number;
+  appleActive: number | null;
   onEdit: (e: ExerciseEntry) => void;
+  onEditApple: () => void;
 }) {
   return (
     <Card>
@@ -233,8 +263,28 @@ function ExerciseCard({
           <span className="font-semibold text-ink">{burned > 0 ? `+${fmt(burned)}` : "0"}</span> kcal
         </span>
       </div>
-      {entries.length > 0 ? (
+      {appleActive !== null || entries.length > 0 ? (
         <ul className="mt-2 divide-y divide-border">
+          {appleActive !== null ? (
+            <li>
+              <button
+                type="button"
+                onClick={onEditApple}
+                className="flex w-full items-center gap-3 py-2.5 text-left"
+              >
+                <Watch className="size-5 shrink-0 text-ink-2" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">Calorías activas · Apple Fitness</span>
+                  <span className="block text-xs text-muted">
+                    {entries.length > 0
+                      ? "Se usan en lugar de los registros de abajo (ya incluyen los entrenamientos del reloj)"
+                      : "Incluyen los entrenamientos del reloj"}
+                  </span>
+                </span>
+                <span className="tabular text-sm font-semibold">+{fmt(appleActive)}</span>
+              </button>
+            </li>
+          ) : null}
           {entries.map((e) => (
             <li key={e.id}>
               <button
@@ -246,13 +296,21 @@ function ExerciseCard({
                   <span className="block truncate font-medium">{e.name}</span>
                   {e.minutes ? <span className="block text-xs text-muted">{e.minutes} min</span> : null}
                 </span>
-                <span className="tabular text-sm font-semibold">+{fmt(e.calories)}</span>
+                <span
+                  className={cx("tabular text-sm font-semibold", appleActive !== null && "text-muted line-through")}
+                >
+                  +{fmt(e.calories)}
+                </span>
               </button>
             </li>
           ))}
         </ul>
       ) : null}
-      <AddLink href="/ejercicio" label="Agregar ejercicio" bordered={entries.length > 0} />
+      <AddLink
+        href="/ejercicio"
+        label="Agregar ejercicio"
+        bordered={appleActive !== null || entries.length > 0}
+      />
     </Card>
   );
 }

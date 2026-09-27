@@ -89,14 +89,15 @@ export function CalorieRing({
   );
 }
 
-function Stat({ label, value, swatch }: { label: string; value: string; swatch?: string }) {
+/** Cifra con etiqueta para las filas de resumen (dentro de un <dl>). */
+export function Stat({ label, value, swatch }: { label: string; value: string; swatch?: string }) {
   return (
     <div className="rounded-2xl bg-field px-2 py-2.5">
       <dt className="flex items-center justify-center gap-1.5 text-xs text-ink-2">
         {swatch ? <Swatch color={swatch} /> : null}
         {label}
       </dt>
-      <dd className="mt-0.5 text-lg font-semibold">{value}</dd>
+      <dd className="tabular mt-0.5 text-lg font-semibold">{value}</dd>
     </div>
   );
 }

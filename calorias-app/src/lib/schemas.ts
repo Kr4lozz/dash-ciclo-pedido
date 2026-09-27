@@ -28,11 +28,18 @@ export const ExerciseEntrySchema = z.object({
   createdAt: z.number().finite(),
 });
 
+/** Calorías quemadas del día según el reloj (totales y/o activas). */
+export const DayBurnSchema = z.object({
+  total: amount(20000).nullable(),
+  active: amount(20000).nullable(),
+});
+
 /** Todo lo registrado en un día: la unidad que se sincroniza. */
 export const DayDocSchema = z.object({
   foods: z.array(FoodEntrySchema).max(300),
   exercises: z.array(ExerciseEntrySchema).max(100),
   water: amount(20000),
+  burned: DayBurnSchema.nullable().optional(),
 });
 
 export const ProfileSchema = z.object({

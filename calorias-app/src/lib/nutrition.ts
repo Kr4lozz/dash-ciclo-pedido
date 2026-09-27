@@ -1,5 +1,6 @@
 import type {
   ActivityLevel,
+  DayBurn,
   ExerciseEntry,
   FoodEntry,
   Goal,
@@ -72,7 +73,7 @@ export interface Targets {
   hasProfile: boolean;
 }
 
-const KCAL_PER_KG = 7700;
+export const KCAL_PER_KG = 7700;
 
 export function computeTargets(p: Profile | null): Targets {
   if (!p) {
@@ -119,11 +120,6 @@ export function macroGrams(kcal: number, pct: Macros): Macros {
   };
 }
 
-export interface DayTotals extends Macros {
-  calories: number;
-  burned: number;
-}
-
 export function sumFoods(foods: FoodEntry[]): Macros & { calories: number } {
   return foods.reduce(
     (acc, f) => ({
@@ -154,13 +150,58 @@ export function recentFoods(foods: FoodEntry[], limit = 80): FoodEntry[] {
   return out;
 }
 
-export function dayTotals(
-  date: string,
-  foods: FoodEntry[],
+/**
+ * Calorías de actividad del día: las activas de Apple Fitness si se anotaron (ya incluyen
+ * los entrenamientos del reloj); si no, la suma de los ejercicios registrados.
+ */
+export function dayActivity(burn: DayBurn | null | undefined, exercises: ExerciseEntry[]): number {
+  return burn?.active ?? sumExercises(exercises);
+}
+
+export interface DayBalance {
+  /** Gasto total del día; null si no hay datos para calcularlo */
+  spent: number | null;
+  /** De dónde sale el gasto */
+  source: "reloj" | "reposo+activas" | "perfil" | null;
+  /** Calorías en reposo estimadas con el perfil (solo si se usaron) */
+  resting: number | null;
+  /** Calorías activas usadas en el cálculo */
+  active: number;
+  /** gasto − comidas: positivo = déficit, negativo = superávit */
+  deficit: number | null;
+}
+
+/**
+ * Déficit calórico del día. Prioridad para el gasto:
+ * 1. calorías totales del reloj;
+ * 2. reposo (Mifflin-St Jeor) + calorías activas del reloj;
+ * 3. gasto diario del perfil + ejercicios registrados (la misma cuenta que usa la meta).
+ */
+export function dayBalance(
+  targets: Targets,
+  burn: DayBurn | null | undefined,
   exercises: ExerciseEntry[],
-): DayTotals {
-  return {
-    ...sumFoods(foods.filter((f) => f.date === date)),
-    burned: sumExercises(exercises.filter((e) => e.date === date)),
-  };
+  eaten: number,
+): DayBalance {
+  const active = dayActivity(burn, exercises);
+  let spent: number | null = null;
+  let source: DayBalance["source"] = null;
+  let resting: number | null = null;
+  if (burn?.total != null) {
+    spent = burn.total;
+    source = "reloj";
+  } else if (targets.hasProfile && burn?.active != null) {
+    resting = targets.bmr;
+    spent = targets.bmr + burn.active;
+    source = "reposo+activas";
+  } else if (targets.hasProfile && burn?.active == null) {
+    spent = targets.tdee + active;
+    source = "perfil";
+  }
+  return { spent, source, resting, active, deficit: spent === null ? null : spent - eaten };
+}
+
+/** Déficit diario que implica la meta (negativo = superávit); null sin perfil. */
+export function plannedDeficit(targets: Targets): number | null {
+  return targets.hasProfile ? targets.tdee - targets.calories : null;
 }

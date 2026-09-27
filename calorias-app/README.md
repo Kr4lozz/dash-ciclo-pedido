@@ -7,14 +7,20 @@ App personal (estilo Fitia) para registrar lo que comes con una foto y las calor
 - **Comida por foto:** tomas una foto y la IA (Google Gemini, capa gratuita) detecta cada alimento con su porción, kcal y macros. Puedes corregir todo antes de guardar.
 - **Comida por texto:** escribes "2 huevos revueltos y un pan con palta" y la IA lo calcula.
 - **Registro manual** y **recientes** (vuelves a agregar un alimento con un toque).
+- **Calorías de Apple Fitness:** en Hoy → **Balance del día** anotas las calorías activas (anillo
+  Moverse) y, si quieres, las totales del día. También puedes subir la captura de los anillos: un
+  OCR que corre en el celular lee las kcal del anillo Moverse, sin IA y sin costo (si no las
+  encuentra, puedes leerla con IA).
+- **Déficit del día:** gasto − comidas. El gasto sale de las calorías totales del reloj; si solo
+  anotas las activas, se suman a tu metabolismo en reposo (Mifflin-St Jeor); sin datos del reloj se
+  estima con tu perfil más el ejercicio registrado.
 - **Ejercicio:**
-  - captura de los anillos de Actividad del iPhone: un OCR que corre en el celular lee las kcal del anillo Moverse, sin IA y sin costo (si no las encuentra, puedes leerla con IA);
   - actividades con cálculo por MET;
   - pasos;
   - kcal manuales.
 - **Meta diaria** calculada con Mifflin-St Jeor según sexo, edad, altura, peso, actividad y objetivo. También puedes fijarla a mano.
 - **Resumen del día:** restantes = meta − comidas + ejercicio, macros y agua.
-- **Progreso:** calorías por día (7 o 30 días), peso y días dentro de la meta.
+- **Progreso:** calorías por día (7 o 30 días), déficit medio, peso y días dentro de la meta.
 - **Se instala en el celular** (Compartir → "Agregar a inicio" en iPhone).
 
 ## Cuentas para la familia
