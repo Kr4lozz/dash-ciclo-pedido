@@ -23,7 +23,7 @@ import { fmt, parseNum } from "@/lib/format";
 import { prepareImage, type PreparedImage } from "@/lib/image";
 import { useSession } from "@/lib/session";
 import { ocrActivity } from "@/lib/ocr";
-import { addExercise, updateExercise, useAppData, useSelectedDate, type NewExercise } from "@/lib/store";
+import { addExercise, setBurned, useAppData, useSelectedDate, type NewExercise } from "@/lib/store";
 import { toast } from "@/lib/toast";
 
 type Mode = "captura" | "actividad" | "pasos" | "manual";
@@ -34,9 +34,6 @@ const MODES: { id: Mode; label: string; Icon: typeof Dumbbell }[] = [
   { id: "pasos", label: "Pasos", Icon: Footprints },
   { id: "manual", label: "Manual", Icon: PenLine },
 ];
-
-/** Prefijo de los registros importados desde una captura; uno por día. */
-const RING_PREFIX = "Calorías activas";
 
 export default function EjercicioPage() {
   const router = useRouter();
@@ -102,7 +99,8 @@ function ScreenshotMode({ date }: { date: string }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState<{ message: string; status: number } | null>(null);
 
-  const existing = data.exercises.find((e) => e.date === date && e.name.startsWith(RING_PREFIX));
+  // Lo que ya se anotó de Apple Fitness ese día (a mano o con otra captura).
+  const existing = data.burned[date];
   const loading = progress !== null || aiLoading;
 
   function show(r: ActivityReading) {
@@ -146,19 +144,11 @@ function ScreenshotMode({ date }: { date: string }) {
 
   function save() {
     if (!valid || !reading) return;
-    const source = /apple|iphone|fitness/i.test(reading.source) ? "iPhone" : reading.source || "captura";
-    const entry = {
-      name: `${RING_PREFIX} · ${source}`,
-      minutes: reading.exerciseMinutes,
-      calories: Math.round(calories),
-    };
-    if (existing) {
-      updateExercise(existing.id, entry);
-      toast(`Actualizado: ${fmt(entry.calories)} kcal activas`);
-    } else {
-      addExercise({ ...entry, date });
-      toast(`+${fmt(entry.calories)} kcal activas`);
-    }
+    const active = Math.round(calories);
+    // Las totales anotadas antes se conservan solo si siguen siendo coherentes.
+    const total = existing?.total != null && existing.total >= active ? existing.total : null;
+    setBurned(date, { active, total });
+    toast(`Apple Fitness: ${fmt(active)} kcal activas`);
     router.push("/");
   }
 
@@ -256,13 +246,13 @@ function ScreenshotMode({ date }: { date: string }) {
           <Field label="Calorías activas a registrar">
             <NumberInput value={kcal} onChange={(e) => setKcal(e.target.value)} placeholder="0" />
           </Field>
-          {existing ? (
+          {existing?.active != null ? (
             <p className="text-xs text-muted">
-              Ya importaste {fmt(existing.calories)} kcal de actividad este día; se reemplazarán por el nuevo valor.
+              Ya anotaste {fmt(existing.active)} kcal activas este día; se reemplazarán por el nuevo valor.
             </p>
           ) : null}
           <Button className="w-full" disabled={!valid} onClick={save}>
-            {existing ? "Actualizar" : "Guardar"} {valid ? `${fmt(calories)} kcal` : ""}
+            {existing?.active != null ? "Actualizar" : "Guardar"} {valid ? `${fmt(calories)} kcal` : ""}
           </Button>
         </div>
       ) : null}
@@ -270,9 +260,9 @@ function ScreenshotMode({ date }: { date: string }) {
       <p className="flex gap-2 rounded-2xl bg-field p-3 text-xs text-ink-2">
         <Info className="mt-0.5 size-4 shrink-0" />
         <span>
-          Las kcal del anillo Moverse ya incluyen los entrenamientos del reloj: no los registres aparte.
-          Si usas esta opción a diario, elige el nivel de actividad «Sedentario» en tu perfil para no
-          contar el ejercicio dos veces.
+          Se guardan como las calorías activas de Apple Fitness del día (en Hoy → Balance del día) y
+          reemplazan a los ejercicios registrados, porque ya incluyen los entrenamientos del reloj. Si
+          las anotas a diario, elige el nivel de actividad «Sedentario» en tu perfil.
         </span>
       </p>
     </div>

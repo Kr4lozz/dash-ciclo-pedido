@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   Droplet,
   History,
+  Scale,
   ShieldCheck,
   Smartphone,
   Sparkles,
@@ -37,7 +38,12 @@ const FEATURES: { Icon: typeof Camera; title: string; text: string }[] = [
   {
     Icon: Smartphone,
     title: "Calorías quemadas",
-    text: "Sube la captura de los anillos de Actividad del iPhone y la app lee las kcal activas, sin IA. También puedes elegir una actividad y sus minutos, contar pasos o anotar lo que marca tu reloj.",
+    text: "Anota las calorías que marca Apple Fitness (o sube la captura de los anillos y la app las lee, sin IA). También puedes elegir una actividad y sus minutos, contar pasos o anotar lo que marca tu reloj.",
+  },
+  {
+    Icon: Scale,
+    title: "Déficit del día",
+    text: "En «Balance del día» ves cuánto gastaste, cuánto comiste y tu déficit (o superávit): gasto − comidas.",
   },
   {
     Icon: Target,

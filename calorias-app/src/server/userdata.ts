@@ -14,7 +14,12 @@ export async function readData(uid: string): Promise<ServerData> {
   return { profile: profile ?? null, weights: weights ?? [], days: days ?? {} };
 }
 
-const isEmpty = (d: DayDoc) => d.foods.length === 0 && d.exercises.length === 0 && d.water === 0;
+const isEmpty = (d: DayDoc) =>
+  d.foods.length === 0 &&
+  d.exercises.length === 0 &&
+  d.water === 0 &&
+  d.burned?.total == null &&
+  d.burned?.active == null;
 
 export async function writeData(uid: string, put: DataPut) {
   const r = db();

@@ -79,6 +79,14 @@ export interface Profile {
   waterGoalMl: number;
 }
 
+/** Calorías quemadas del día según Apple Fitness (u otro reloj), anotadas a mano o por captura. */
+export interface DayBurn {
+  /** Calorías totales del día (activas + en reposo) */
+  total: number | null;
+  /** Calorías activas (anillo Moverse) */
+  active: number | null;
+}
+
 export interface AppData {
   version: 1;
   profile: Profile | null;
@@ -86,5 +94,7 @@ export interface AppData {
   exercises: ExerciseEntry[];
   /** ml de agua por fecha */
   water: Record<string, number>;
+  /** calorías quemadas según el reloj, por fecha */
+  burned: Record<string, DayBurn>;
   weights: WeightEntry[];
 }

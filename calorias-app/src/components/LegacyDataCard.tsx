@@ -17,6 +17,7 @@ export function LegacyDataCard() {
   const parts = [
     count(summary.foods, "alimento", "alimentos"),
     count(summary.exercises, "ejercicio", "ejercicios"),
+    count(summary.burned, "día de Apple Fitness", "días de Apple Fitness"),
     count(summary.weights, "registro de peso", "registros de peso"),
     summary.profile ? "tu perfil" : null,
   ].filter(Boolean);

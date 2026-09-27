@@ -6,7 +6,7 @@ import { CaloriesChart, CaloriesLegend, WeightChart } from "@/components/Charts"
 import { Button, Card, NumberInput, PageHeader, Segmented } from "@/components/ui";
 import { lastNDays, longDate, todayStr } from "@/lib/dates";
 import { fmt, fmt1, parseNum } from "@/lib/format";
-import { computeTargets } from "@/lib/nutrition";
+import { computeTargets, dayBalance } from "@/lib/nutrition";
 import { deleteWeight, logWeight, useAppData } from "@/lib/store";
 import { toast } from "@/lib/toast";
 
@@ -20,25 +20,28 @@ export default function ProgresoPage() {
 
   const days = useMemo(() => {
     const dates = lastNDays(today, Number(range));
-    const byDate = new Map(dates.map((d) => [d, { date: d, consumed: 0, burned: 0, logged: false }]));
-    for (const f of data.foods) {
-      const d = byDate.get(f.date);
-      if (d) {
-        d.consumed += f.calories;
-        d.logged = true;
-      }
-    }
-    for (const e of data.exercises) {
-      const d = byDate.get(e.date);
-      if (d) d.burned += e.calories;
-    }
-    return [...byDate.values()];
-  }, [data.foods, data.exercises, range, today]);
+    return dates.map((date) => {
+      const foods = data.foods.filter((f) => f.date === date);
+      const consumed = foods.reduce((a, f) => a + f.calories, 0);
+      const exercises = data.exercises.filter((e) => e.date === date);
+      const balance = dayBalance(targets, data.burned[date], exercises, consumed);
+      return {
+        date,
+        consumed,
+        burned: balance.active,
+        /** Solo hay déficit que mostrar si se registraron comidas ese día */
+        deficit: foods.length > 0 ? balance.deficit : null,
+        logged: foods.length > 0,
+      };
+    });
+  }, [data.foods, data.exercises, data.burned, targets, range, today]);
 
   const logged = days.filter((d) => d.logged);
   const avg = (vals: number[]) => (vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0);
   const avgConsumed = avg(logged.map((d) => d.consumed));
   const avgBurned = avg(days.map((d) => d.burned));
+  const deficits = days.flatMap((d) => (d.deficit === null ? [] : [d.deficit]));
+  const avgDeficit = avg(deficits);
   const onTarget = logged.filter((d) => d.consumed <= targets.calories + d.burned).length;
 
   return (
@@ -55,10 +58,15 @@ export default function ProgresoPage() {
           ]}
         />
 
-        <dl className="grid grid-cols-3 gap-2">
+        <dl className="grid grid-cols-2 gap-2">
           <Kpi label="Consumo medio" value={logged.length ? fmt(avgConsumed) : "—"} unit="kcal/día" />
           <Kpi label="Ejercicio medio" value={fmt(avgBurned)} unit="kcal/día" />
-          <Kpi label="Días en meta" value={`${onTarget}/${logged.length}`} unit="registrados" />
+          <Kpi
+            label={avgDeficit < 0 ? "Superávit medio" : "Déficit medio"}
+            value={deficits.length ? fmt(Math.abs(avgDeficit)) : "—"}
+            unit="kcal/día (gasto − comidas)"
+          />
+          <Kpi label="Días en meta" value={`${onTarget}/${logged.length}`} unit="días registrados" />
         </dl>
 
         <Card className="space-y-3">
@@ -76,7 +84,7 @@ export default function ProgresoPage() {
                   <th className="py-1 font-medium">Día</th>
                   <th className="py-1 text-right font-medium">Consumidas</th>
                   <th className="py-1 text-right font-medium">Quemadas</th>
-                  <th className="py-1 text-right font-medium">Neto</th>
+                  <th className="py-1 text-right font-medium">Déficit</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -85,11 +93,14 @@ export default function ProgresoPage() {
                     <td className="py-1.5">{longDate(d.date)}</td>
                     <td className="py-1.5 text-right">{fmt(d.consumed)}</td>
                     <td className="py-1.5 text-right">{fmt(d.burned)}</td>
-                    <td className="py-1.5 text-right">{fmt(d.consumed - d.burned)}</td>
+                    <td className="py-1.5 text-right">{d.deficit === null ? "—" : fmt(d.deficit)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <p className="mt-2 text-xs text-muted">
+              Déficit = gasto del día (Apple Fitness o estimado con tu perfil) − comidas. Negativo = superávit.
+            </p>
           </details>
         </Card>
 
