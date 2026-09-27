@@ -22,9 +22,14 @@ App personal (estilo Fitia) para registrar lo que comes con una foto y las calor
 Con una base de datos conectada, cada persona crea su cuenta (usuario y contraseña) y sus
 registros se guardan en la nube: no se pierden al cambiar de celular y cada uno ve solo lo suyo.
 
-- Para crear una cuenta se pide el **código familiar** (`APP_ACCESS_CODE`).
+- Para crear una cuenta se pide el **código familiar** (`APP_ACCESS_CODE`), así nadie ajeno a
+  la familia crea cuentas ni gasta la cuota de la IA. El link de invitación
+  (`/registro?codigo=…`) ya lo incluye, así que la familia no tiene que escribirlo.
 - La **primera cuenta** que se crea administra la familia. Desde **Perfil → Familia** puede
   compartir la invitación, dar una contraseña nueva a quien la olvidó y eliminar cuentas.
+- **Probar sin cuenta:** quien no quiera registrarse puede usar la app con sus datos solo en el
+  celular y hasta 5 análisis con IA por día (`GUEST_AI_DAILY_LIMIT`). Si después crea su cuenta,
+  puede pasar esos registros a ella.
 - Cada persona tiene un máximo diario de análisis con IA (40 por defecto) para no agotar la
   cuota gratuita de Gemini de toda la familia.
 - Si antes usaste la app sin cuenta, al entrar aparece la opción de pasar esos registros a tu
@@ -52,8 +57,9 @@ Sin base de datos la app funciona en **modo local**: todo se guarda solo en el d
 4. Abre la app y crea tu cuenta primero (así quedas como administrador).
 
 Opcional: `GEMINI_MODEL` para cambiar el modelo principal (por defecto `gemini-flash-latest`;
-si está saturado se usa `gemini-flash-lite-latest`) y `AI_DAILY_LIMIT` para el máximo diario
-de análisis por persona.
+si está saturado se usa `gemini-flash-lite-latest`), `AI_DAILY_LIMIT` para el máximo diario
+de análisis por persona y `GUEST_AI_DAILY_LIMIT` para quien prueba sin cuenta. Si Gemini falla,
+el intento no se descuenta.
 
 La capa gratuita de Gemini tiene límites por minuto y por día. Google puede usar lo que envías
 en la capa gratuita para mejorar sus productos: no subas fotos que no quieras compartir.

@@ -432,6 +432,7 @@ function AnalysisError({ error, status }: { error: string | null; status: number
   if (!error) return null;
   // En modo local el código de acceso se escribe en Perfil.
   const needsCode = session.status === "local" && (status === 401 || status === 503);
+  const trialOver = session.status === "guest" && status === 429;
   return (
     <div role="alert" className="flex gap-2 rounded-2xl bg-danger-soft p-3 text-sm text-danger-text">
       <TriangleAlert className="mt-0.5 size-4 shrink-0" />
@@ -442,6 +443,14 @@ function AnalysisError({ error, status }: { error: string | null; status: number
             {" "}
             <Link href="/perfil#conexion" className="font-semibold underline">
               Ir a Perfil
+            </Link>
+          </>
+        ) : null}
+        {trialOver ? (
+          <>
+            {" "}
+            <Link href="/registro" className="font-semibold underline">
+              Crear cuenta
             </Link>
           </>
         ) : null}

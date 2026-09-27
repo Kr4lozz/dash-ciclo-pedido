@@ -233,6 +233,11 @@ function ScreenshotMode({ date }: { date: string }) {
                 Ir a Perfil
               </Link>
             ) : null}
+            {session.status === "guest" && error.status === 429 ? (
+              <Link href="/registro" className="font-semibold underline">
+                Crear cuenta
+              </Link>
+            ) : null}
           </p>
         </div>
       ) : null}

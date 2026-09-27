@@ -10,11 +10,13 @@ import { Card, cx } from "@/components/ui";
 import { addDays, dateLabel, longDate, todayStr } from "@/lib/dates";
 import { fmt, fmt1 } from "@/lib/format";
 import { computeTargets, sumExercises, sumFoods } from "@/lib/nutrition";
+import { useSession } from "@/lib/session";
 import { setSelectedDate, setWater, useAppData, useSelectedDate } from "@/lib/store";
 import { MEALS, type ExerciseEntry, type FoodEntry, type MealType } from "@/lib/types";
 
 export default function TodayPage() {
   const data = useAppData();
+  const session = useSession();
   const date = useSelectedDate();
   const [editingFood, setEditingFood] = useState<FoodEntry | null>(null);
   const [editingExercise, setEditingExercise] = useState<ExerciseEntry | null>(null);
@@ -33,6 +35,15 @@ export default function TodayPage() {
     <>
       <DateNav date={date} />
       <main className="space-y-4 px-4">
+        {session.status === "guest" ? (
+          <Link
+            href="/registro"
+            className="flex items-center gap-2 rounded-2xl bg-card px-4 py-2.5 text-sm ring-1 ring-border"
+          >
+            <span className="flex-1 text-ink-2">Estás probando sin cuenta</span>
+            <span className="font-semibold text-accent-text">Crear cuenta</span>
+          </Link>
+        ) : null}
         <LegacyDataCard />
         {!data.profile ? <ProfileCallout /> : null}
 

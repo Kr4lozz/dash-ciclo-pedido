@@ -83,8 +83,12 @@ function FamilyAdmin({ selfId }: { selfId: string }) {
     }
   }
 
-  const link = typeof window !== "undefined" ? window.location.origin : "";
-  const invitation = `¡Únete a Mis Calorías! Entra a ${link}, toca «Crear mi cuenta» y usa el código familiar: ${familyCode}`;
+  // El código va dentro del link: quien lo abre no tiene que escribirlo.
+  const link =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/registro?codigo=${encodeURIComponent(familyCode)}`
+      : "";
+  const invitation = `¡Únete a Mis Calorías! Crea tu cuenta desde este link (el código familiar ya va incluido): ${link}`;
 
   async function share() {
     try {
@@ -106,12 +110,12 @@ function FamilyAdmin({ selfId }: { selfId: string }) {
           <Share2 className="size-5" /> Invita a tu familia
         </h2>
         <p className="text-sm text-ink-2">
-          Comparte el link y el código familiar. Cada persona crea su propia cuenta y solo ve sus
-          registros.
+          Comparte este link: ya lleva el código familiar, así que solo tienen que elegir su usuario
+          y contraseña. Cada persona ve solo sus registros.
         </p>
         <div className="rounded-2xl bg-field p-3 text-sm">
-          <p className="text-ink-2">Link</p>
-          <p className="break-all font-semibold">{link}</p>
+          <p className="text-ink-2">Link de invitación</p>
+          <p className="break-all font-semibold">{familyCode ? link : "—"}</p>
           <p className="mt-2 text-ink-2">Código familiar</p>
           <p className="font-mono font-semibold">{familyCode || "—"}</p>
         </div>

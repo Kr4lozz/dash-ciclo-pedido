@@ -58,6 +58,10 @@ const commands = {
     store.set(k, { type: "string", value: str(v), expiresAt });
     return "OK";
   },
+  keys: ([pattern]) => {
+    const re = new RegExp(`^${String(pattern).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`);
+    return [...store.keys()].filter((k) => entry(k) && re.test(k));
+  },
   del: (ks) => ks.reduce((n, k) => n + (entry(k) && store.delete(k) ? 1 : 0), 0),
   exists: (ks) => ks.reduce((n, k) => n + (entry(k) ? 1 : 0), 0),
   expire: ([k, s]) => {
@@ -74,6 +78,13 @@ const commands = {
   incr: ([k]) => {
     const e = entry(k);
     const n = (e ? Number(e.value) : 0) + 1;
+    if (e) e.value = str(n);
+    else store.set(k, { type: "string", value: str(n), expiresAt: 0 });
+    return n;
+  },
+  decr: ([k]) => {
+    const e = entry(k);
+    const n = (e ? Number(e.value) : 0) - 1;
     if (e) e.value = str(n);
     else store.set(k, { type: "string", value: str(n), expiresAt: 0 });
     return n;
