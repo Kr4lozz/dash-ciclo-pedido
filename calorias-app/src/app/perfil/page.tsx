@@ -23,6 +23,7 @@ import { LegacyDataCard } from "@/components/LegacyDataCard";
 import { Sheet } from "@/components/Sheet";
 import {
   Button,
+  ButtonLink,
   Card,
   Field,
   NumberInput,
@@ -134,7 +135,13 @@ export default function PerfilPage() {
     <>
       <PageHeader title="Perfil" back={null} />
       <main className="space-y-4 px-4">
-        {session.status === "user" ? <AccountCard user={session.user} /> : <LocalModeCard />}
+        {session.status === "user" ? (
+          <AccountCard user={session.user} />
+        ) : session.status === "guest" ? (
+          <GuestCard />
+        ) : (
+          <LocalModeCard />
+        )}
         <LegacyDataCard />
         {/* Se vuelve a montar si el perfil cambia (p. ej. llega desde otro dispositivo). */}
         <ProfileForm key={JSON.stringify(data.profile)} profile={data.profile} showName={!account} />
@@ -570,6 +577,27 @@ function ChangePasswordForm({ onDone }: { onDone: () => void }) {
         Guardar contraseña
       </Button>
     </form>
+  );
+}
+
+function GuestCard() {
+  return (
+    <Card className="space-y-3">
+      <p className="flex gap-3 text-sm text-ink-2">
+        <Smartphone className="mt-0.5 size-5 shrink-0 text-accent-text" />
+        <span>
+          <span className="block font-semibold text-ink">Estás probando sin cuenta</span>
+          Tus registros se guardan solo en este celular. Crea tu cuenta para guardarlos en la
+          nube y no perderlos; al crearla podrás pasarlos a tu cuenta.
+        </span>
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <ButtonLink href="/registro">Crear cuenta</ButtonLink>
+        <ButtonLink href="/entrar" variant="secondary">
+          Ya tengo cuenta
+        </ButtonLink>
+      </div>
+    </Card>
   );
 }
 

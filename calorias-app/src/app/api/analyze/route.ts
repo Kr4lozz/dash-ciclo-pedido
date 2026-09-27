@@ -8,7 +8,7 @@ import {
   type Analysis,
 } from "@/lib/analysis";
 import { currentUser } from "@/server/auth";
-import { json, safeEqual } from "@/server/http";
+import { clientIp, json, safeEqual } from "@/server/http";
 import { db, keys, storageEnabled } from "@/server/kv";
 
 export const maxDuration = 60;
@@ -49,28 +49,54 @@ Escribe notes en español.`;
 
 /** Análisis por persona y día, para que nadie agote la cuota gratuita de toda la familia. */
 const AI_DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT) || 40;
+/** Quien prueba sin cuenta: pocos análisis por día y por conexión (IP). */
+const GUEST_AI_DAILY_LIMIT = Number(process.env.GUEST_AI_DAILY_LIMIT) || 5;
+
+const usageKey = (id: string) => keys.ai(id, new Date().toISOString().slice(0, 10));
+
+/** Suma un uso del día; true si se pasó del límite. */
+async function overDailyLimit(key: string, limit: number) {
+  const used = await db().incr(key);
+  if (used === 1) await db().expire(key, 2 * 24 * 60 * 60);
+  return used > limit;
+}
+
+/** Devuelve el uso si el análisis falló por Gemini (no es culpa de la persona). */
+async function refundUsage(key: string | null) {
+  if (key) await db().decr(key).catch(() => undefined);
+}
 
 /**
- * Con cuentas: hace falta haber entrado y se cuenta el uso diario.
+ * Con cuentas: con sesión se cuenta el uso diario de la persona; sin sesión (prueba sin
+ * cuenta) se cuenta por IP con un límite menor.
  * Sin base de datos (modo local): se pide el código de acceso en la cabecera.
  */
-async function accessError(req: Request, count = false): Promise<Response | null> {
+async function checkAccess(
+  req: Request,
+  count = false,
+): Promise<{ denied: Response | null; usage: string | null }> {
   if (storageEnabled()) {
+    if (!count) return { denied: null, usage: null };
     const user = await currentUser();
-    if (!user) return json({ error: "Tu sesión terminó. Vuelve a entrar para usar la IA." }, 401);
-    if (count) {
-      const key = keys.ai(user.id, new Date().toISOString().slice(0, 10));
-      const used = await db().incr(key);
-      if (used === 1) await db().expire(key, 2 * 24 * 60 * 60);
-      if (used > AI_DAILY_LIMIT) {
-        return json({ error: `Llegaste al límite de ${AI_DAILY_LIMIT} análisis por hoy. Mañana se renueva.` }, 429);
-      }
+    const usage = usageKey(user ? user.id : `invitado:${clientIp(req)}`);
+    if (await overDailyLimit(usage, user ? AI_DAILY_LIMIT : GUEST_AI_DAILY_LIMIT)) {
+      await refundUsage(usage); // el intento rechazado no cuenta
+      const error = user
+        ? `Llegaste al límite de ${AI_DAILY_LIMIT} análisis por hoy. Mañana se renueva.`
+        : `La prueba sin cuenta permite ${GUEST_AI_DAILY_LIMIT} análisis por día. Crea tu cuenta para seguir usando la IA.`;
+      return { denied: json({ error }, 429), usage: null };
     }
-    return null;
+    return { denied: null, usage };
   }
+  return { denied: legacyCodeError(req), usage: null };
+}
+
+/** Modo local (sin base de datos): se pide el código de acceso en la cabecera. */
+function legacyCodeError(req: Request): Response | null {
   const expected = process.env.APP_ACCESS_CODE?.trim();
   if (!expected) {
-    // En local se permite sin código; en Vercel el enlace es público y cualquiera gastaría tu cuota.
+    // Sin código configurado se permite en desarrollo; en Vercel el enlace es público y
+    // cualquiera gastaría tu cuota.
     return process.env.VERCEL
       ? json({ error: "Falta configurar APP_ACCESS_CODE en las variables de entorno de Vercel." }, 503)
       : null;
@@ -85,15 +111,13 @@ const MISSING_KEY = "Falta configurar GEMINI_API_KEY en el servidor.";
 
 /** Comprueba la configuración y el código de acceso sin llamar a la IA. */
 export async function GET(req: Request) {
-  const denied = await accessError(req);
+  const { denied } = await checkAccess(req);
   if (denied) return denied;
   if (!process.env.GEMINI_API_KEY) return json({ error: MISSING_KEY }, 503);
   return json({ ok: true, model: MODELS[0] });
 }
 
 export async function POST(req: Request) {
-  const denied = await accessError(req, true);
-  if (denied) return denied;
   if (!process.env.GEMINI_API_KEY) return json({ error: MISSING_KEY }, 503);
 
   let body: unknown;
@@ -106,6 +130,9 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return json({ error: parsed.error.issues[0]?.message ?? "Solicitud inválida." }, 400);
   }
+  // Se cuenta el uso solo para solicitudes válidas.
+  const { denied, usage } = await checkAccess(req, true);
+  if (denied) return denied;
   const { kind, image, text } = parsed.data;
   const detail = text?.trim();
 
@@ -130,6 +157,7 @@ export async function POST(req: Request) {
     const analysis = await generate(AnalysisSchema, FOOD_PROMPT, parts);
     return json({ result: clean(analysis) });
   } catch (err) {
+    await refundUsage(usage);
     return errorResponse(err);
   }
 }

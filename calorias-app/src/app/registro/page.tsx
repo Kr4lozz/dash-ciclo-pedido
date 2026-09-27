@@ -10,7 +10,7 @@ import {
   passwordError,
   usernameError,
 } from "@/lib/account";
-import { accountApi } from "@/lib/api";
+import { ApiError, accountApi } from "@/lib/api";
 import { signedIn } from "@/lib/session";
 import { toast } from "@/lib/toast";
 
@@ -24,7 +24,11 @@ export default function RegistroPage() {
   const [username, setUsername] = useState("");
   const [usernameTouched, setUsernameTouched] = useState(false);
   const [password, setPassword] = useState("");
-  const [familyCode, setFamilyCode] = useState("");
+  // El link de invitación trae el código (?codigo=...): se completa solo.
+  const [familyCode, setFamilyCode] = useState(
+    () => new URLSearchParams(window.location.search).get("codigo")?.trim() ?? "",
+  );
+  const [codeFromLink, setCodeFromLink] = useState(() => familyCode !== "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,6 +49,8 @@ export default function RegistroPage() {
       signedIn(res.user); // la app redirige a Perfil
     } catch (err) {
       setError((err as Error).message);
+      // Si el código del link no sirve, se muestra el campo para escribirlo.
+      if (err instanceof ApiError && err.status === 403) setCodeFromLink(false);
       setLoading(false);
     }
   }
@@ -87,17 +93,23 @@ export default function RegistroPage() {
             autoComplete="new-password"
             required
           />
-          <Field label="Código familiar" hint="Te lo da quien te compartió el link.">
-            <TextInput
-              value={familyCode}
-              onChange={(e) => setFamilyCode(e.target.value)}
-              autoComplete="off"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              required
-            />
-          </Field>
+          {codeFromLink ? (
+            <p className="rounded-2xl bg-accent-soft p-3 text-sm text-ink-2">
+              El código familiar ya viene en tu link de invitación.
+            </p>
+          ) : (
+            <Field label="Código familiar" hint="Te lo da quien te compartió el link.">
+              <TextInput
+                value={familyCode}
+                onChange={(e) => setFamilyCode(e.target.value)}
+                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                required
+              />
+            </Field>
+          )}
           {error ? (
             <p role="alert" className="flex gap-2 rounded-2xl bg-danger-soft p-3 text-sm text-danger-text">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" />

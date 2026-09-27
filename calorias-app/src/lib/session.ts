@@ -18,10 +18,13 @@ export type SessionState =
   | { status: "local" }
   /** hay cuentas y nadie entró (expired: la sesión terminó sola) */
   | { status: "anon"; expired?: boolean }
+  /** hay cuentas pero la persona prueba la app sin registrarse: datos solo en el celular */
+  | { status: "guest" }
   | { status: "user"; user: SessionUser; offline: boolean }
   | { status: "error" };
 
 const CACHE_KEY = "mis-calorias:sesion";
+const GUEST_KEY = "mis-calorias:invitado";
 const LOADING: SessionState = { status: "loading" };
 
 let state: SessionState = LOADING;
@@ -64,6 +67,23 @@ function writeCache(info: SessionInfo) {
   }
 }
 
+function isGuest(): boolean {
+  try {
+    return window.localStorage.getItem(GUEST_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setGuest(on: boolean) {
+  try {
+    if (on) window.localStorage.setItem(GUEST_KEY, "1");
+    else window.localStorage.removeItem(GUEST_KEY);
+  } catch {
+    // sin almacenamiento
+  }
+}
+
 function apply(info: SessionInfo, offline: boolean) {
   if (!info.storage) {
     configureStore({ kind: "local" });
@@ -71,6 +91,11 @@ function apply(info: SessionInfo, offline: boolean) {
   } else if (info.user) {
     configureStore({ kind: "user", uid: info.user.id });
     set({ status: "user", user: info.user, offline });
+  } else if (isGuest()) {
+    // Prueba sin cuenta: funciona como el modo local; si luego crea su cuenta,
+    // la app le ofrece pasar estos registros a la cuenta.
+    configureStore({ kind: "local" });
+    set({ status: "guest" });
   } else {
     configureStore({ kind: "none" });
     set({ status: "anon" });
@@ -115,8 +140,15 @@ export function retrySession() {
   void load();
 }
 
+/** Probar la app sin crear una cuenta. */
+export function startGuest() {
+  setGuest(true);
+  apply({ storage: true, user: null }, false);
+}
+
 /** Después de entrar o registrarse. */
 export function signedIn(user: SessionUser) {
+  setGuest(false);
   const info = { storage: true, user };
   writeCache(info);
   apply(info, false);

@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { WELCOME_SEEN_KEY } from "@/components/ClientGate";
 import { Button, ButtonLink, Card } from "@/components/ui";
-import { useSession } from "@/lib/session";
+import { startGuest, useSession } from "@/lib/session";
 
 const FEATURES: { Icon: typeof Camera; title: string; text: string }[] = [
   {
@@ -59,8 +59,10 @@ const FEATURES: { Icon: typeof Camera; title: string; text: string }[] = [
 export default function BienvenidaPage() {
   const session = useSession();
   const router = useRouter();
-  const accounts = session.status === "anon" || session.status === "user";
+  const accounts =
+    session.status === "anon" || session.status === "user" || session.status === "guest";
   const signedIn = session.status === "user";
+  const guest = session.status === "guest";
 
   function start() {
     try {
@@ -75,6 +77,15 @@ export default function BienvenidaPage() {
     <ButtonLink href="/" className="w-full">
       Ir a mi diario
     </ButtonLink>
+  ) : guest ? (
+    <div className="space-y-2">
+      <ButtonLink href="/registro" className="w-full">
+        Crear mi cuenta
+      </ButtonLink>
+      <ButtonLink href="/" variant="secondary" className="w-full">
+        Seguir probando
+      </ButtonLink>
+    </div>
   ) : accounts ? (
     <div className="space-y-2">
       <ButtonLink href="/registro" className="w-full">
@@ -83,6 +94,20 @@ export default function BienvenidaPage() {
       <ButtonLink href="/entrar" variant="secondary" className="w-full">
         Ya tengo cuenta
       </ButtonLink>
+      <Button
+        variant="ghost"
+        className="w-full"
+        onClick={() => {
+          startGuest();
+          router.push("/");
+        }}
+      >
+        Probar sin cuenta
+      </Button>
+      <p className="text-center text-xs text-muted">
+        Sin cuenta, tus registros se guardan solo en este celular. Si luego creas tu cuenta,
+        puedes pasarlos a ella.
+      </p>
     </div>
   ) : (
     <Button className="w-full" onClick={start}>
@@ -92,7 +117,7 @@ export default function BienvenidaPage() {
 
   const steps = accounts
     ? [
-        "Crea tu cuenta con el código familiar (te lo da quien te compartió el link).",
+        "Crea tu cuenta (el código familiar viene en el link de invitación) o pruébala sin cuenta.",
         "Completa tu perfil para calcular tu meta de calorías.",
         "Registra tu primera comida con el botón de la cámara.",
         "Instala la app en tu celular para abrirla como cualquier otra.",
@@ -105,7 +130,7 @@ export default function BienvenidaPage() {
 
   return (
     <main className="space-y-6 px-4 pb-10 pt-[max(1rem,env(safe-area-inset-top))]">
-      {signedIn ? (
+      {signedIn || guest ? (
         <Link
           href="/perfil"
           aria-label="Volver"
@@ -177,7 +202,8 @@ export default function BienvenidaPage() {
         {accounts ? (
           <p className="text-sm text-ink-2">
             Cada persona tiene su cuenta y solo ve sus propios registros. Se guardan en la nube,
-            así que puedes usar la app en varios dispositivos sin perder nada.
+            así que puedes usar la app en varios dispositivos sin perder nada. Si la pruebas sin
+            cuenta, tus registros quedan solo en tu celular.
           </p>
         ) : (
           <p className="text-sm text-ink-2">
@@ -191,7 +217,6 @@ export default function BienvenidaPage() {
         </p>
       </Card>
 
-      {actions}
     </main>
   );
 }
