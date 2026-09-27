@@ -42,3 +42,6 @@ next-env.d.ts
 
 # plantilla de variables de entorno
 !.env.example
+
+# motor de OCR copiado desde node_modules (scripts/copy-ocr-assets.mjs)
+/public/ocr

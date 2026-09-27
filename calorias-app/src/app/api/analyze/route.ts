@@ -1,6 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import { ApiError, GoogleGenAI, type Part } from "@google/genai";
 import { timingSafeEqual } from "node:crypto";
+import { z } from "zod";
 import {
   ActivityReadingSchema,
   AnalysisSchema,
@@ -11,11 +11,11 @@ import {
 
 export const maxDuration = 60;
 
-const MODEL = process.env.ANTHROPIC_MODEL?.trim() || "claude-opus-5";
-// `effort` no existe en Haiku 4.5 ni en modelos anteriores a la familia 4.6.
-const SUPPORTS_EFFORT = !/haiku|sonnet-4-5|opus-4-5|claude-3/.test(MODEL);
-// Reintento automático en otro modelo si el principal rechaza la solicitud.
-const SUPPORTS_FALLBACKS = /^claude-(opus|fable)-5/.test(MODEL);
+// "gemini-flash-latest" apunta siempre al Flash más reciente (disponible en la capa gratuita).
+// Si el alias dejara de existir, se prueba el siguiente modelo de la lista.
+const MODELS = [
+  ...new Set([process.env.GEMINI_MODEL?.trim() || "gemini-flash-latest", "gemini-2.5-flash"]),
+];
 
 const FOOD_PROMPT = `Eres un nutricionista que estima calorías y macronutrientes de comidas para el diario de alimentación personal de un usuario. Recibirás una foto de su comida, una descripción en texto, o ambas.
 
@@ -25,6 +25,7 @@ const FOOD_PROMPT = `Eres un nutricionista que estima calorías y macronutriente
 - Si el usuario indica cantidades, ingredientes o forma de preparación, dales prioridad sobre lo que infieras de la imagen.
 - Reconoce platos típicos de Latinoamérica y España por su nombre y descomponlos en sus componentes principales cuando eso mejore la precisión.
 - Si no hay comida ni bebida, responde con isFood = false, sin elementos, y explica en notes qué se ve.
+- En portion usa una medida casera seguida del peso, por ejemplo "1 taza (160 g)". En notes escribe como máximo dos frases con los supuestos principales.
 
 Escribe todo en español, con nombres de alimentos cortos y claros.`;
 
@@ -33,7 +34,7 @@ const ACTIVITY_PROMPT = `Lees capturas de pantalla de apps de actividad física 
 - activeCalories: calorías activas del día. En los anillos de Apple es el anillo rojo "Moverse" / "Move" (por ejemplo "450/600 KCAL" → 450). Usa el valor alcanzado, no la meta, y no uses calorías en reposo ni totales si hay un dato de calorías activas.
 - exerciseMinutes: valor alcanzado del anillo verde "Ejercicio" / "Exercise".
 - steps: pasos del día, si aparecen.
-- Si un dato no se lee con claridad, devuélvelo como null; no lo inventes.
+- Si un dato no se lee con claridad, omítelo; no lo inventes.
 - Si la imagen no es una captura de actividad física, usa isActivityScreenshot = false.
 
 Escribe notes en español.`;
@@ -45,7 +46,7 @@ function json(body: unknown, status = 200) {
 function accessError(req: Request): Response | null {
   const expected = process.env.APP_ACCESS_CODE?.trim();
   if (!expected) {
-    // En local se permite sin código; en Vercel el enlace es público y gastaría tu saldo.
+    // En local se permite sin código; en Vercel el enlace es público y cualquiera gastaría tu cuota.
     return process.env.VERCEL
       ? json({ error: "Falta configurar APP_ACCESS_CODE en las variables de entorno de Vercel." }, 503)
       : null;
@@ -58,22 +59,20 @@ function accessError(req: Request): Response | null {
   return null;
 }
 
+const MISSING_KEY = "Falta configurar GEMINI_API_KEY en el servidor.";
+
 /** Comprueba la configuración y el código de acceso sin llamar a la IA. */
 export async function GET(req: Request) {
   const denied = accessError(req);
   if (denied) return denied;
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return json({ error: "Falta configurar ANTHROPIC_API_KEY en el servidor." }, 503);
-  }
-  return json({ ok: true, model: MODEL });
+  if (!process.env.GEMINI_API_KEY) return json({ error: MISSING_KEY }, 503);
+  return json({ ok: true, model: MODELS[0] });
 }
 
 export async function POST(req: Request) {
   const denied = accessError(req);
   if (denied) return denied;
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return json({ error: "Falta configurar ANTHROPIC_API_KEY en el servidor." }, 503);
-  }
+  if (!process.env.GEMINI_API_KEY) return json({ error: MISSING_KEY }, 503);
 
   let body: unknown;
   try {
@@ -88,15 +87,9 @@ export async function POST(req: Request) {
   const { kind, image, text } = parsed.data;
   const detail = text?.trim();
 
-  const content: Anthropic.Beta.BetaContentBlockParam[] = [];
-  if (image) {
-    content.push({
-      type: "image",
-      source: { type: "base64", media_type: image.mediaType, data: image.data },
-    });
-  }
-  content.push({
-    type: "text",
+  const parts: Part[] = [];
+  if (image) parts.push({ inlineData: { mimeType: image.mediaType, data: image.data } });
+  parts.push({
     text:
       kind === "actividad"
         ? "Lee los datos de actividad de esta captura."
@@ -107,83 +100,93 @@ export async function POST(req: Request) {
           : `Estima las calorías y macros de esta comida: ${detail}`,
   });
 
-  const client = new Anthropic({ timeout: 50_000, maxRetries: 1 });
-  const base = {
-    model: MODEL,
-    max_tokens: 16000,
-    ...(SUPPORTS_FALLBACKS
-      ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }
-      : {}),
-    messages: [{ role: "user" as const, content }],
-  };
-
   try {
     if (kind === "actividad") {
-      const response = await client.beta.messages.parse({
-        ...base,
-        system: ACTIVITY_PROMPT,
-        output_config: {
-          ...(SUPPORTS_EFFORT ? { effort: "low" as const } : {}),
-          format: betaZodOutputFormat(ActivityReadingSchema),
+      const reading = await generate(ActivityReadingSchema, ACTIVITY_PROMPT, parts);
+      return json({ result: cleanActivity(reading) });
+    }
+    const analysis = await generate(AnalysisSchema, FOOD_PROMPT, parts);
+    return json({ result: clean(analysis) });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+class BlockedError extends Error {}
+
+/** Llama a Gemini pidiendo JSON con el esquema dado y valida la respuesta. */
+async function generate<T extends z.ZodType>(
+  schema: T,
+  systemInstruction: string,
+  parts: Part[],
+): Promise<z.infer<T>> {
+  const ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+    httpOptions: { timeout: 50_000 },
+  });
+  const responseJsonSchema = z.toJSONSchema(schema);
+  delete responseJsonSchema.$schema; // Gemini no admite esta clave
+  let lastError: unknown;
+  for (const model of MODELS) {
+    try {
+      const res = await ai.models.generateContent({
+        model,
+        contents: parts,
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          responseJsonSchema,
+          temperature: 0.2,
         },
       });
-      const stopped = stopError(response.stop_reason);
-      if (stopped || !response.parsed_output) return stopped ?? incomplete();
-      return json({ result: cleanActivity(response.parsed_output) });
+      const text = res.text;
+      if (!text) throw new BlockedError(res.promptFeedback?.blockReason ?? "sin respuesta");
+      return schema.parse(JSON.parse(text));
+    } catch (err) {
+      // Modelo inexistente: probar el siguiente de la lista.
+      if (err instanceof ApiError && err.status === 404) {
+        lastError = err;
+        continue;
+      }
+      throw err;
     }
+  }
+  throw lastError;
+}
 
-    const response = await client.beta.messages.parse({
-      ...base,
-      system: FOOD_PROMPT,
-      output_config: {
-        ...(SUPPORTS_EFFORT ? { effort: "medium" as const } : {}),
-        format: betaZodOutputFormat(AnalysisSchema),
-      },
-    });
-    const stopped = stopError(response.stop_reason);
-    if (stopped || !response.parsed_output) return stopped ?? incomplete();
-    return json({ result: clean(response.parsed_output) });
-  } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
-      return json({ error: "La API key de Anthropic no es válida o no tiene permisos." }, 502);
+function errorResponse(err: unknown): Response {
+  if (err instanceof ApiError) {
+    console.error("Gemini API error:", err.status, err.message);
+    if (err.status === 429) {
+      return json(
+        { error: "Llegaste al límite gratuito de Gemini. Espera un minuto (o hasta mañana si es el límite diario)." },
+        429,
+      );
     }
-    if (err instanceof Anthropic.RateLimitError) {
-      return json({ error: "Demasiadas solicitudes seguidas. Espera un momento e intenta de nuevo." }, 429);
+    if (err.status === 401 || err.status === 403 || /api key/i.test(err.message)) {
+      return json({ error: "La GEMINI_API_KEY no es válida o no tiene permisos." }, 502);
     }
-    if (err instanceof Anthropic.BadRequestError) {
-      console.error("Anthropic 400:", err.message);
+    if (err.status === 400) {
       return json({ error: "No se pudo procesar la imagen o el texto. Prueba con otra foto." }, 400);
     }
-    if (err instanceof Anthropic.APIConnectionTimeoutError) {
-      return json({ error: "La IA tardó demasiado en responder. Intenta de nuevo." }, 504);
-    }
-    if (err instanceof Anthropic.APIError) {
-      console.error("Anthropic API error:", err.status, err.message);
-      return json({ error: "El servicio de IA no está disponible ahora. Intenta en unos minutos." }, 502);
-    }
-    if (err instanceof Anthropic.AnthropicError) {
-      // Falló la validación de la salida estructurada.
-      console.error("Anthropic parse error:", err.message);
-      return json({ error: "No se pudo interpretar la respuesta de la IA. Intenta de nuevo." }, 502);
-    }
-    console.error(err);
-    return json({ error: "Error inesperado al analizar la comida." }, 500);
+    return json({ error: "Gemini no está disponible ahora. Intenta en unos segundos." }, 502);
   }
-}
-
-function stopError(stop: string | null): Response | null {
-  if (stop === "refusal") {
+  if (err instanceof BlockedError) {
     return json({ error: "La IA no pudo analizar esta solicitud. Prueba con otra imagen o descripción." }, 422);
   }
-  return stop === "max_tokens" ? incomplete() : null;
+  if (err instanceof SyntaxError || err instanceof z.ZodError) {
+    console.error("Respuesta de Gemini inválida:", err.message);
+    return json({ error: "No se pudo interpretar la respuesta de la IA. Intenta de nuevo." }, 502);
+  }
+  if (err instanceof Error && /timeout|timed out|abort/i.test(`${err.name} ${err.message}`)) {
+    return json({ error: "La IA tardó demasiado en responder. Intenta de nuevo." }, 504);
+  }
+  console.error(err);
+  return json({ error: "Error inesperado al analizar la imagen." }, 500);
 }
 
-function incomplete() {
-  return json({ error: "La respuesta de la IA quedó incompleta. Intenta de nuevo." }, 502);
-}
-
-function cleanActivity(a: ActivityReading): ActivityReading {
-  const n = (v: number | null) => (v != null && Number.isFinite(v) && v >= 0 ? Math.round(v) : null);
+function cleanActivity(a: z.infer<typeof ActivityReadingSchema>): ActivityReading {
+  const n = (v: number | undefined) => (v != null && Number.isFinite(v) && v >= 0 ? Math.round(v) : null);
   return {
     isActivityScreenshot: a.isActivityScreenshot,
     source: a.source.trim().slice(0, 60),

@@ -1,18 +1,29 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { Footprints, ImagePlus, Info, LoaderCircle, PenLine, Smartphone, TriangleAlert, Dumbbell } from "lucide-react";
+import {
+  Dumbbell,
+  Footprints,
+  ImagePlus,
+  Info,
+  LoaderCircle,
+  PenLine,
+  Smartphone,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react";
 import { Button, Field, NumberInput, PageHeader, TextInput, cx } from "@/components/ui";
 import { ACTIVITIES, activityCalories, stepsCalories } from "@/lib/activities";
 import type { ActivityReading } from "@/lib/analysis";
 import { ApiError, readActivity } from "@/lib/api";
 import { dateLabel } from "@/lib/dates";
 import { fmt, parseNum } from "@/lib/format";
-import { prepareImage } from "@/lib/image";
+import { prepareImage, type PreparedImage } from "@/lib/image";
+import { ocrActivity } from "@/lib/ocr";
 import { addExercise, updateExercise, useAppData, useSelectedDate, type NewExercise } from "@/lib/store";
 import { toast } from "@/lib/toast";
-import Link from "next/link";
 
 type Mode = "captura" | "actividad" | "pasos" | "manual";
 
@@ -82,30 +93,49 @@ function ScreenshotMode({ date }: { date: string }) {
   const router = useRouter();
   const data = useAppData();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PreparedImage | null>(null);
   const [reading, setReading] = useState<ActivityReading | null>(null);
   const [kcal, setKcal] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState<{ message: string; status: number } | null>(null);
 
   const existing = data.exercises.find((e) => e.date === date && e.name.startsWith(RING_PREFIX));
+  const loading = progress !== null || aiLoading;
+
+  function show(r: ActivityReading) {
+    setReading(r);
+    setKcal(r.activeCalories != null ? String(r.activeCalories) : "");
+  }
 
   async function onFile(file: File | undefined) {
     if (!file) return;
     setError(null);
     setReading(null);
-    setLoading(true);
+    setProgress(0);
     try {
-      // Una captura necesita buena resolución para leer los números.
-      const img = await prepareImage(file, 1568, 0.9);
-      setPreview(img.previewUrl);
-      const r = await readActivity({ data: img.data, mediaType: img.mediaType });
-      setReading(r);
-      setKcal(r.activeCalories != null ? String(r.activeCalories) : "");
+      // Vista previa y, si hace falta, envío a la IA con resolución suficiente para leer números.
+      setPreview(await prepareImage(file, 1568, 0.9));
+      const { reading: r } = await ocrActivity(file, setProgress);
+      show(r);
+    } catch (e) {
+      setError({ message: (e as Error).message || "No se pudo leer la captura.", status: 0 });
+    } finally {
+      setProgress(null);
+    }
+  }
+
+  /** Respaldo con IA (Gemini) cuando el OCR no encuentra las kcal. */
+  async function readWithAi() {
+    if (!preview) return;
+    setError(null);
+    setAiLoading(true);
+    try {
+      show(await readActivity({ data: preview.data, mediaType: preview.mediaType }));
     } catch (e) {
       setError({ message: (e as Error).message, status: e instanceof ApiError ? e.status : 0 });
     } finally {
-      setLoading(false);
+      setAiLoading(false);
     }
   }
 
@@ -150,8 +180,8 @@ function ScreenshotMode({ date }: { date: string }) {
           </div>
           <p className="mt-3 font-semibold">Sube una captura de tus anillos</p>
           <p className="mt-1 text-sm text-ink-2">
-            Abre la app Fitness del iPhone, haz una captura del resumen del día y súbela. La IA lee
-            las kcal del anillo Moverse.
+            Abre la app Fitness del iPhone, haz una captura del resumen del día y súbela. La app lee
+            las kcal del anillo Moverse en tu celular, sin IA y gratis.
           </p>
           <Button className="mt-5 w-full" onClick={() => inputRef.current?.click()}>
             <ImagePlus className="size-5" /> Elegir captura
@@ -160,11 +190,14 @@ function ScreenshotMode({ date }: { date: string }) {
       ) : (
         <div className="flex gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element -- vista previa local (data URL) */}
-          <img src={preview} alt="Captura de actividad" className="h-40 w-24 shrink-0 rounded-2xl object-cover ring-1 ring-border" />
+          <img src={preview.previewUrl} alt="Captura de actividad" className="h-40 w-24 shrink-0 rounded-2xl object-cover ring-1 ring-border" />
           <div className="min-w-0 flex-1 space-y-2 text-sm">
             {loading ? (
               <p className="flex items-center gap-2 text-ink-2">
-                <LoaderCircle className="size-5 animate-spin" /> Leyendo la captura…
+                <LoaderCircle className="size-5 animate-spin" />
+                {aiLoading
+                  ? "Leyendo con IA…"
+                  : `Leyendo la captura…${progress ? ` ${Math.round(progress * 100)} %` : ""}`}
               </p>
             ) : reading ? (
               <>
@@ -202,10 +235,13 @@ function ScreenshotMode({ date }: { date: string }) {
         </div>
       ) : null}
 
-      {reading && !reading.isActivityScreenshot ? (
-        <p className="rounded-2xl bg-field p-3 text-sm text-ink-2">
-          No parece una captura de actividad. Puedes escribir las calorías abajo o probar con otra imagen.
-        </p>
+      {reading && reading.activeCalories == null && !loading ? (
+        <div className="space-y-2 rounded-2xl bg-field p-3 text-sm text-ink-2">
+          <p>No pude leer las kcal del anillo Moverse. Escríbelas abajo o intenta leerla con IA.</p>
+          <Button variant="secondary" className="w-full" onClick={() => void readWithAi()}>
+            <Sparkles className="size-5" /> Leer con IA
+          </Button>
+        </div>
       ) : null}
 
       {reading ? (

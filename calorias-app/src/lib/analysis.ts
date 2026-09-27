@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-// Esquema de la respuesta de la IA (salida estructurada). Lo usa la ruta /api/analyze;
-// el cliente solo importa los tipos.
+// Esquemas de la respuesta de la IA (salida JSON estructurada de Gemini). Los usa la ruta
+// /api/analyze; el cliente solo importa los tipos.
 
 export const FoodItemSchema = z.object({
   name: z.string().describe("Nombre corto del alimento, p. ej. 'Arroz blanco'"),
@@ -30,7 +30,10 @@ export const AnalysisSchema = z.object({
 export type FoodItem = z.infer<typeof FoodItemSchema>;
 export type Analysis = z.infer<typeof AnalysisSchema>;
 
-/** Lectura de una captura de los anillos de Actividad (iPhone / Apple Watch) u otra app de fitness. */
+/**
+ * Lectura de una captura de los anillos de Actividad (iPhone / Apple Watch) u otra app de fitness.
+ * Los datos que no se ven se omiten (campos opcionales).
+ */
 export const ActivityReadingSchema = z.object({
   isActivityScreenshot: z
     .boolean()
@@ -38,17 +41,21 @@ export const ActivityReadingSchema = z.object({
   source: z.string().describe("App de origen, p. ej. 'Actividad de Apple', 'Fitness', 'Garmin Connect'"),
   activeCalories: z
     .number()
-    .nullable()
-    .describe("Calorías activas del día (anillo Moverse / 'Move'), en kcal; null si no se ven"),
-  exerciseMinutes: z
-    .number()
-    .nullable()
-    .describe("Minutos del anillo Ejercicio; null si no se ven"),
-  steps: z.number().nullable().describe("Pasos del día; null si no se ven"),
+    .optional()
+    .describe("Calorías activas del día (anillo Moverse / 'Move'), en kcal; omitir si no se ven"),
+  exerciseMinutes: z.number().optional().describe("Minutos del anillo Ejercicio; omitir si no se ven"),
+  steps: z.number().optional().describe("Pasos del día; omitir si no se ven"),
   notes: z.string().describe("Una frase: qué se leyó o por qué no se pudo leer"),
 });
 
-export type ActivityReading = z.infer<typeof ActivityReadingSchema>;
+export interface ActivityReading {
+  isActivityScreenshot: boolean;
+  source: string;
+  activeCalories: number | null;
+  exerciseMinutes: number | null;
+  steps: number | null;
+  notes: string;
+}
 
 export const ANALYZE_LIMITS = {
   /** Base64 de la imagen; el límite de cuerpo de Vercel Functions es 4,5 MB. */
