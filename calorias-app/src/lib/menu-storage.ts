@@ -4,9 +4,13 @@ import { userScopedKey } from "./store";
 
 // El menú y las respuestas se guardan solo en este dispositivo, por cuenta.
 
+export type MenuView = "opciones" | "dia";
+
 export interface MenuState {
   settings: MenuSettings;
   plan: MenuPlan | null;
+  /** Última vista usada: opciones por comida o día completo */
+  view: MenuView;
 }
 
 const VERSION = 1;
@@ -49,12 +53,16 @@ export function loadMenu(): MenuState {
     const raw = JSON.parse(window.localStorage.getItem(userScopedKey("menu")) ?? "null");
     if (raw?.v === VERSION) {
       const settings = cleanSettings(raw.settings);
-      return { settings, plan: isPlan(raw.plan) ? { ...raw.plan, settings: cleanSettings(raw.plan.settings) } : null };
+      return {
+        settings,
+        plan: isPlan(raw.plan) ? { ...raw.plan, settings: cleanSettings(raw.plan.settings) } : null,
+        view: raw.view === "dia" ? "dia" : "opciones",
+      };
     }
   } catch {
     // sin almacenamiento o dato dañado
   }
-  return { settings: DEFAULT_SETTINGS, plan: null };
+  return { settings: DEFAULT_SETTINGS, plan: null, view: "opciones" };
 }
 
 export function saveMenu(state: MenuState) {
