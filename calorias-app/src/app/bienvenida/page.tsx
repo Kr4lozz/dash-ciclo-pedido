@@ -14,6 +14,7 @@ import {
   Smartphone,
   Sparkles,
   Target,
+  Utensils,
 } from "lucide-react";
 import { WELCOME_SEEN_KEY } from "@/components/ClientGate";
 import { Button, ButtonLink, Card } from "@/components/ui";
@@ -44,6 +45,11 @@ const FEATURES: { Icon: typeof Camera; title: string; text: string }[] = [
     Icon: Scale,
     title: "Déficit del día",
     text: "En «Balance del día» ves cuánto gastaste, cuánto comiste y tu déficit (o superávit): gasto − comidas.",
+  },
+  {
+    Icon: Utensils,
+    title: "Menú del día",
+    text: "Dinos qué comidas haces, qué snacks te gustan y qué no comes: armamos tu día con platos caseros peruanos y económicos, con las cantidades para tu meta y tus macros.",
   },
   {
     Icon: Target,

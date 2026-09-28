@@ -18,6 +18,11 @@ App personal (estilo Fitia) para registrar lo que comes con una foto y las calor
   - actividades con cálculo por MET;
   - pasos;
   - kcal manuales.
+- **Menú del día:** preguntas qué comidas haces (desayuno, media mañana, almuerzo, lonche, cena),
+  qué snacks te gustan y qué no comes, y arma el día con platos caseros peruanos de bajo costo
+  (`src/lib/menu-data.ts`). Las cantidades, en medidas caseras, se ajustan para todo el día a la vez
+  con mínimos cuadrados para acercarse a la meta de calorías y macros (`src/lib/menu.ts`), sin IA.
+  Cada comida tiene «Otra opción» y «Agregar al diario»; puede descontar lo ya registrado.
 - **Meta diaria** calculada con Mifflin-St Jeor según sexo, edad, altura, peso, actividad y objetivo. También puedes fijarla a mano.
 - **Resumen del día:** restantes = meta − comidas + ejercicio, macros y agua.
 - **Progreso:** calorías por día (7 o 30 días), déficit medio, peso y días dentro de la meta.
@@ -91,6 +96,7 @@ KV_REST_API_URL=http://127.0.0.1:8079 KV_REST_API_TOKEN=dev APP_ACCESS_CODE=fami
 - `src/app/page.tsx`: pantalla Hoy.
 - `src/app/agregar/`: agregar comida (foto, texto, manual, recientes).
 - `src/app/ejercicio/`: agregar ejercicio (captura, actividad, pasos, manual).
+- `src/app/menu/`: menú del día (preguntas, platos sugeridos y cantidades).
 - `src/app/progreso/`, `src/app/perfil/`: progreso y perfil.
 - `src/app/bienvenida/`, `src/app/entrar/`, `src/app/registro/`, `src/app/familia/`: inicio, acceso y administración de la familia.
 - `src/app/api/analyze/route.ts`: llamada a Gemini con salida JSON estructurada.
