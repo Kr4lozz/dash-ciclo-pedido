@@ -48,8 +48,8 @@ const FEATURES: { Icon: typeof Camera; title: string; text: string }[] = [
   },
   {
     Icon: Utensils,
-    title: "Menú del día",
-    text: "Dinos qué comidas haces, qué snacks te gustan y qué no comes: armamos tu día con platos caseros peruanos y económicos, con las cantidades para tu meta y tus macros.",
+    title: "Qué comer",
+    text: "En Menú eliges la comida y ves platos caseros peruanos y económicos, o ingredientes por grupo, con los gramos que te tocan según tu meta y tus macros. También puedes pedir el día completo armado.",
   },
   {
     Icon: Target,

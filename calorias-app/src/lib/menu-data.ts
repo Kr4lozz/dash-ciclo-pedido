@@ -261,3 +261,59 @@ export const DISHES: Dish[] = [
   { id: "s-cancha", kind: "snack", snack: "galletas", name: "Cancha serrana", avoid: [], items: [C("cancha", 1)] },
   { id: "s-quaker", kind: "snack", snack: "avena", name: "Quaker con leche", avoid: ["lacteos"], items: [C("avena", 2, "Avena (quaker)"), F("leche", 1)] },
 ];
+
+// ---------- Por ingrediente ----------
+
+/**
+ * Para armar un plato por partes: una opción de cada grupo, con la cantidad que le toca.
+ * `macro` es lo que define la cantidad (0 = kcal, 1 = proteína, 2 = carbohidratos, 3 = grasa)
+ * y `share`, qué parte de ese macro de la comida cubre el grupo (el resto lo aportan los
+ * demás ingredientes: el arroz también trae algo de proteína, el pollo algo de grasa…).
+ */
+export interface IngredientGroup {
+  id: string;
+  label: string;
+  hint: string;
+  macro: 0 | 1 | 2 | 3;
+  share: number;
+  kinds: DishKind[];
+  foods: FoodId[];
+}
+
+export const INGREDIENT_GROUPS: IngredientGroup[] = [
+  { id: "proteina", label: "Proteína", hint: "Elige una", macro: 1, share: 0.75, kinds: ["almuerzo", "cena"],
+    foods: ["pechuga", "pierna", "pescado", "carne", "higado", "atun", "huevo", "queso"] },
+  { id: "proteina-desayuno", label: "Proteína", hint: "Elige una", macro: 1, share: 0.6, kinds: ["desayuno"],
+    foods: ["huevo", "queso", "pechuga", "atun"] },
+  { id: "carbohidrato", label: "Carbohidrato", hint: "Elige uno", macro: 2, share: 0.85, kinds: ["almuerzo", "cena"],
+    foods: ["arroz", "fideos", "papa", "camote", "yuca", "quinua", "choclo"] },
+  { id: "carbohidrato-desayuno", label: "Carbohidrato", hint: "Elige uno", macro: 2, share: 0.8, kinds: ["desayuno"],
+    foods: ["pan", "avena", "camote", "quinua", "choclo", "platano"] },
+  { id: "menestras", label: "Menestras", hint: "Con la mitad del carbohidrato", macro: 2, share: 0.45, kinds: ["almuerzo", "cena"],
+    foods: ["lentejas", "frejol", "garbanzos", "arvejas", "pallares", "habas"] },
+  { id: "grasa", label: "Grasa", hint: "Elige una", macro: 3, share: 0.5, kinds: ["desayuno", "almuerzo", "cena"],
+    foods: ["aceite", "palta", "mani"] },
+  { id: "snack", label: "Snack", hint: "Elige uno", macro: 0, share: 1, kinds: ["snack"],
+    foods: ["platano", "manzana", "mandarina", "papaya", "naranja", "yogur", "huevo", "queso", "pan", "mani", "choclo", "camote", "galletas", "cancha"] },
+];
+
+/** Qué ingredientes deja fuera cada respuesta de «¿Hay algo que no comes?». */
+export const FOOD_AVOID: Partial<Record<FoodId, Avoid>> = {
+  pescado: "pescado",
+  atun: "pescado",
+  pechuga: "pollo",
+  pierna: "pollo",
+  carne: "carne",
+  higado: "visceras",
+  huevo: "huevo",
+  queso: "lacteos",
+  yogur: "lacteos",
+  leche: "lacteos",
+  cremaAji: "lacteos",
+  lentejas: "menestras",
+  frejol: "menestras",
+  garbanzos: "menestras",
+  arvejas: "menestras",
+  pallares: "menestras",
+  habas: "menestras",
+};

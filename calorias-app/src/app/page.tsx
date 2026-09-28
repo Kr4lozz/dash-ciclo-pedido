@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Camera, ChevronLeft, ChevronRight, Minus, Plus, Target, Watch } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Minus, Plus, Target, Utensils, Watch } from "lucide-react";
 import { BalanceCard, BurnSheet } from "@/components/DayBalance";
 import { ExerciseEditSheet, FoodEditSheet } from "@/components/EditSheets";
 import { LegacyDataCard } from "@/components/LegacyDataCard";
@@ -234,7 +234,12 @@ function MealCard({
           ))}
         </ul>
       ) : null}
-      <AddLink href={`/agregar?comida=${meal}`} label={`Agregar a ${title.toLowerCase()}`} bordered={entries.length > 0} />
+      <AddLink
+        href={`/agregar?comida=${meal}`}
+        label={`Agregar a ${title.toLowerCase()}`}
+        bordered={entries.length > 0}
+        ideas={{ href: `/menu?comida=${meal}`, label: `Qué comer en ${title.toLowerCase()}` }}
+      />
     </Card>
   );
 }
@@ -315,16 +320,32 @@ function ExerciseCard({
   );
 }
 
-function AddLink({ href, label, bordered }: { href: string; label: string; bordered: boolean }) {
+function AddLink({
+  href,
+  label,
+  bordered,
+  ideas,
+}: {
+  href: string;
+  label: string;
+  bordered: boolean;
+  /** Enlace a las opciones del menú para esa comida */
+  ideas?: { href: string; label: string };
+}) {
   return (
-    <Link
-      href={href}
-      className={cx(
-        "mt-2 flex items-center gap-2 pt-2 text-sm font-semibold text-accent-text",
-        bordered && "border-t border-border",
-      )}
-    >
-      <Plus className="size-4" /> {label}
-    </Link>
+    <div className={cx("mt-2 flex items-center justify-between gap-3 pt-2", bordered && "border-t border-border")}>
+      <Link href={href} className="flex items-center gap-2 text-sm font-semibold text-accent-text">
+        <Plus className="size-4" /> {label}
+      </Link>
+      {ideas ? (
+        <Link
+          href={ideas.href}
+          aria-label={ideas.label}
+          className="flex shrink-0 items-center gap-1.5 text-sm font-medium text-ink-2 hover:text-ink"
+        >
+          <Utensils className="size-4" /> ¿Qué como?
+        </Link>
+      ) : null}
+    </div>
   );
 }

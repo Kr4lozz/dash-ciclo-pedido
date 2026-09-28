@@ -1,4 +1,15 @@
-import { DISHES, FOODS, type Avoid, type Dish, type DishItem, type DishKind, type Food, type SnackKind } from "./menu-data";
+import {
+  DISHES,
+  FOOD_AVOID,
+  FOODS,
+  INGREDIENT_GROUPS,
+  type Avoid,
+  type Dish,
+  type DishItem,
+  type DishKind,
+  type Food,
+  type SnackKind,
+} from "./menu-data";
 import { macroGrams, type Targets } from "./nutrition";
 import type { FoodEntry, Macros, MealType } from "./types";
 
@@ -432,6 +443,11 @@ function formatPortion(food: Food, amount: number): string {
 }
 
 function toMeal(slot: SlotId, dish: Dish, amounts: number[], size: number, seen: string[]): PlannedMeal {
+  return { slot, dishId: dish.id, name: dish.name, ...itemsOf(dish, amounts), size, seen, added: false };
+}
+
+/** Ingredientes con su porción y macros (se omiten los que quedaron en cero). */
+function itemsOf(dish: Dish, amounts: number[]): { items: PlannedItem[]; total: Vec } {
   const items: PlannedItem[] = [];
   dish.items.forEach((it, i) => {
     const amount = amounts[i];
@@ -451,7 +467,7 @@ function toMeal(slot: SlotId, dish: Dish, amounts: number[], size: number, seen:
     (t, it) => [t[0] + it.calories, t[1] + it.protein, t[2] + it.carbs, t[3] + it.fat],
     [0, 0, 0, 0],
   );
-  return { slot, dishId: dish.id, name: dish.name, items, total, size, seen, added: false };
+  return { items, total };
 }
 
 /** Comidas del día que ya tienen algo registrado. */
@@ -619,4 +635,104 @@ export function anotherOption(plan: MenuPlan, slotId: SlotId): MenuPlan {
   const temperature = slot.kind === "snack" ? SNACK_TEMPERATURE : TEMPERATURE;
   const weights = finalists.map((f) => Math.exp(-(f.score - finalists[0].score) / temperature));
   return { ...plan, meals: finalists[sample(weights, rand)].meals };
+}
+
+// ---------- Opciones por comida ----------
+
+/** Comida del menú que corresponde a una comida del diario (los snacks van al lonche). */
+export function slotForMeal(meal: MealType, settings: MenuSettings): SlotId {
+  if (meal !== "snack") return meal;
+  return settings.slots.includes("media-manana") && !settings.slots.includes("lonche") ? "media-manana" : "lonche";
+}
+
+/**
+ * Lo que le toca a una comida: su parte de lo que queda del día si ya hay registros y esa
+ * comida falta; si no, su parte de la meta del día completo.
+ */
+export function mealTarget(
+  goal: Vec,
+  settings: MenuSettings,
+  logged: FoodEntry[],
+  slotId: SlotId,
+): { target: Vec; fromRemaining: boolean } {
+  const slots = settings.slots.includes(slotId) ? settings.slots : [...settings.slots, slotId];
+  const shareOf = (ids: SlotId[]) => ids.reduce<Vec>((acc, id) => addVec(acc, slotInfo(id).share), [0, 0, 0, 0]);
+  const share = slotInfo(slotId).share;
+  const done = loggedSlots(slots, logged);
+  if (logged.length > 0 && !done.includes(slotId)) {
+    const eaten = sumEntries(logged);
+    const open = shareOf(slots.filter((id) => !done.includes(id)));
+    const target = goal.map((v, k) => (Math.max(0, v - eaten[k]) * share[k]) / open[k]) as Vec;
+    return { target, fromRemaining: true };
+  }
+  const all = shareOf(slots);
+  return { target: goal.map((v, k) => (v * share[k]) / all[k]) as Vec, fromRemaining: false };
+}
+
+export interface DishOption {
+  dishId: string;
+  name: string;
+  items: PlannedItem[];
+  total: Vec;
+  /** Qué tan lejos queda de lo que le toca a la comida (0 = exacto) */
+  cost: number;
+}
+
+/**
+ * Todos los platos posibles para una comida, con las cantidades para su meta, del que mejor
+ * se ajusta al que menos (en los snacks, primero los que la persona dijo que le gustan).
+ */
+export function dishOptions(kind: DishKind, target: Vec, settings: MenuSettings): DishOption[] {
+  const liked = (d: Dish) => (kind === "snack" && d.snack && settings.snacks.includes(d.snack) ? 1 : 0);
+  return DISHES.filter((d) => d.kind === kind && !d.avoid.some((a) => settings.avoid.includes(a)))
+    .map((dish) => {
+      const solved = solveDay([{ model: modelOf(dish), size: target[0] }], ZERO, target);
+      return { dish, cost: solved.cost, ...itemsOf(dish, solved.amounts[0]) };
+    })
+    .sort((a, b) => liked(b.dish) - liked(a.dish) || a.cost - b.cost)
+    .map(({ dish, items, total, cost }) => ({ dishId: dish.id, name: dish.name, items, total, cost }));
+}
+
+export interface IngredientOption {
+  name: string;
+  portion: string;
+  calories: number;
+  /** Gramos del macro del grupo que aporta esa cantidad */
+  macro: number;
+}
+
+export interface IngredientList {
+  id: string;
+  label: string;
+  hint: string;
+  macro: 0 | 1 | 2 | 3;
+  /** Cuánto de ese macro (o kcal) debería aportar cada opción */
+  goal: number;
+  options: IngredientOption[];
+}
+
+/** Para armar el plato por partes: cuánto de cada ingrediente le toca a la comida. */
+export function ingredientLists(kind: DishKind, target: Vec, settings: MenuSettings): IngredientList[] {
+  return INGREDIENT_GROUPS.filter((g) => g.kinds.includes(kind)).flatMap((g) => {
+    const goal = target[g.macro] * g.share;
+    const options = g.foods
+      .filter((id) => {
+        const avoid = FOOD_AVOID[id];
+        return !avoid || !settings.avoid.includes(avoid);
+      })
+      .map((id) => {
+        const food: Food = FOODS[id];
+        const u = perUnit(food);
+        // Las grasas y el aceite pueden quedar en cero; lo demás, al menos la porción mínima.
+        const min = food.min > 0 ? food.min : food.step;
+        const amount = clamp(toStep(goal / u[g.macro], food.step), min, food.max);
+        return {
+          name: food.name,
+          portion: formatPortion(food, amount),
+          calories: Math.round(u[0] * amount),
+          macro: round1(u[g.macro] * amount),
+        };
+      });
+    return options.length > 0 ? [{ id: g.id, label: g.label, hint: g.hint, macro: g.macro, goal, options }] : [];
+  });
 }
