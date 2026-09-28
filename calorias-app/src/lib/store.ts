@@ -655,6 +655,13 @@ function mergeRemote(server: ServerData): AppData {
 export function forgetUserCache(uidToForget: string) {
   removeKey(userKey(uidToForget));
   removeKey(pendingKey(uidToForget));
+  removeKey(userScopedKey("menu", uidToForget));
+}
+
+/** Clave de este dispositivo para datos propios de cada cuenta (o del modo local). */
+export function userScopedKey(name: string, uidOverride?: string): string {
+  const id = uidOverride ?? (mode.kind === "user" ? mode.uid : "local");
+  return `mis-calorias:${name}:${id}`;
 }
 
 // ---------- Código de acceso a la API (solo modo local) ----------

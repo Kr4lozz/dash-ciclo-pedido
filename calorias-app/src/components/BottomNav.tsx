@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartColumn, House, UserRound } from "lucide-react";
+import { ChartColumn, House, UserRound, Utensils } from "lucide-react";
 import { cx } from "./ui";
 
 const HIDDEN = ["/agregar", "/ejercicio", "/bienvenida", "/entrar", "/registro", "/familia"];
 
 const TABS = [
   { href: "/", label: "Hoy", Icon: House },
+  { href: "/menu", label: "Menú", Icon: Utensils },
   { href: "/progreso", label: "Progreso", Icon: ChartColumn },
   { href: "/perfil", label: "Perfil", Icon: UserRound },
 ];
