@@ -59,7 +59,7 @@ const FEATURES: { Icon: typeof Camera; title: string; text: string }[] = [
   {
     Icon: ChartColumn,
     title: "Progreso",
-    text: "Mira tus calorías de los últimos 7 o 30 días, cuántos días cumpliste la meta y cómo evoluciona tu peso.",
+    text: "Mira tus calorías consumidas y quemadas de los últimos 7 o 30 días con el déficit de cada día, el déficit acumulado, cuántos días cumpliste la meta y cómo evoluciona tu peso.",
   },
   {
     Icon: Droplet,

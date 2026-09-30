@@ -3,10 +3,10 @@
 import { useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { CaloriesChart, CaloriesLegend, WeightChart } from "@/components/Charts";
-import { Button, Card, NumberInput, PageHeader, Segmented } from "@/components/ui";
-import { lastNDays, longDate, todayStr } from "@/lib/dates";
+import { Button, Card, NumberInput, PageHeader, Segmented, Swatch } from "@/components/ui";
+import { lastNDays, longDate, shortDate, todayStr } from "@/lib/dates";
 import { fmt, fmt1, parseNum } from "@/lib/format";
-import { computeTargets, dayBalance } from "@/lib/nutrition";
+import { KCAL_PER_KG, computeTargets, dayBalance } from "@/lib/nutrition";
 import { deleteWeight, logWeight, useAppData } from "@/lib/store";
 import { toast } from "@/lib/toast";
 
@@ -24,25 +24,39 @@ export default function ProgresoPage() {
       const foods = data.foods.filter((f) => f.date === date);
       const consumed = foods.reduce((a, f) => a + f.calories, 0);
       const exercises = data.exercises.filter((e) => e.date === date);
-      const balance = dayBalance(targets, data.burned[date], exercises, consumed);
+      const burn = data.burned[date];
+      const balance = dayBalance(targets, burn, exercises, consumed);
+      const logged = foods.length > 0;
       return {
         date,
         consumed,
-        burned: balance.active,
-        /** Solo hay déficit que mostrar si se registraron comidas ese día */
-        deficit: foods.length > 0 ? balance.deficit : null,
-        logged: foods.length > 0,
+        /** Actividad del día: lo que suma a la meta («Días en meta») */
+        activity: balance.active,
+        /** Gasto total: solo hay algo que mostrar si ese día se registró algo */
+        burned: logged || burn ? balance.spent : null,
+        estimated: balance.source !== "reloj",
+        /** Solo cuentan los días con comidas: sin ellas el «déficit» sería el gasto entero */
+        deficit: logged ? balance.deficit : null,
+        logged,
       };
     });
   }, [data.foods, data.exercises, data.burned, targets, range, today]);
 
   const logged = days.filter((d) => d.logged);
+  const counted = days.filter((d) => d.deficit !== null);
   const avg = (vals: number[]) => (vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0);
+  const sum = (vals: number[]) => vals.reduce((a, b) => a + b, 0);
   const avgConsumed = avg(logged.map((d) => d.consumed));
-  const avgBurned = avg(days.map((d) => d.burned));
-  const deficits = days.flatMap((d) => (d.deficit === null ? [] : [d.deficit]));
-  const avgDeficit = avg(deficits);
-  const onTarget = logged.filter((d) => d.consumed <= targets.calories + d.burned).length;
+  const avgBurned = avg(counted.map((d) => d.burned ?? 0));
+  const totalDeficit = sum(counted.map((d) => d.deficit ?? 0));
+  const avgDeficit = avg(counted.map((d) => d.deficit ?? 0));
+  const onTarget = logged.filter((d) => d.consumed <= targets.calories + d.activity).length;
+
+  // Acumulado día a día (en orden cronológico) para la tabla.
+  const rows = days.map((d, i) => ({
+    ...d,
+    cumulative: d.deficit === null ? null : sum(days.slice(0, i + 1).map((x) => x.deficit ?? 0)),
+  }));
 
   return (
     <>
@@ -59,12 +73,27 @@ export default function ProgresoPage() {
         />
 
         <dl className="grid grid-cols-2 gap-2">
+          <div className="col-span-2 rounded-3xl bg-card p-4 ring-1 ring-border">
+            <dt className="flex items-center gap-1.5 text-xs text-ink-2">
+              <Swatch color="var(--deficit)" />
+              {totalDeficit < 0 ? "Superávit acumulado" : "Déficit acumulado"} · {range} días
+            </dt>
+            <dd className="mt-1 text-4xl font-semibold tracking-tight">
+              {counted.length ? fmt(Math.abs(totalDeficit)) : "—"}
+              {counted.length ? <span className="ml-1.5 text-base font-medium text-ink-2">kcal</span> : null}
+            </dd>
+            <dd className="mt-0.5 text-xs text-muted">
+              {counted.length
+                ? `≈ ${fmt1(Math.abs(totalDeficit) / KCAL_PER_KG)} kg de grasa ${totalDeficit < 0 ? "de más" : "menos"} · ${counted.length} ${counted.length === 1 ? "día" : "días"} con comidas`
+                : "Registra comidas y tu gasto (Apple Fitness) para verlo"}
+            </dd>
+          </div>
           <Kpi label="Consumo medio" value={logged.length ? fmt(avgConsumed) : "—"} unit="kcal/día" />
-          <Kpi label="Ejercicio medio" value={fmt(avgBurned)} unit="kcal/día" />
+          <Kpi label="Quemado medio" value={counted.length ? fmt(avgBurned) : "—"} unit="kcal/día (gasto total)" />
           <Kpi
             label={avgDeficit < 0 ? "Superávit medio" : "Déficit medio"}
-            value={deficits.length ? fmt(Math.abs(avgDeficit)) : "—"}
-            unit="kcal/día (gasto − comidas)"
+            value={counted.length ? fmt(Math.abs(avgDeficit)) : "—"}
+            unit="kcal/día (quemado − consumo)"
           />
           <Kpi label="Días en meta" value={`${onTarget}/${logged.length}`} unit="días registrados" />
         </dl>
@@ -72,34 +101,44 @@ export default function ProgresoPage() {
         <Card className="space-y-3">
           <div>
             <h2 className="font-semibold">Calorías por día</h2>
-            <p className="text-xs text-muted">Meta actual: {fmt(targets.calories)} kcal</p>
+            <p className="text-xs text-muted">
+              Quemadas = gasto total del día (Apple Fitness o estimado con tu perfil). Meta actual:{" "}
+              {fmt(targets.calories)} kcal.
+            </p>
           </div>
           <CaloriesLegend />
           <CaloriesChart days={days} goal={targets.calories} />
           <details className="text-sm">
             <summary className="cursor-pointer font-medium text-accent-text">Ver tabla</summary>
-            <table className="tabular mt-2 w-full text-left">
-              <thead className="text-xs text-muted">
-                <tr>
-                  <th className="py-1 font-medium">Día</th>
-                  <th className="py-1 text-right font-medium">Consumidas</th>
-                  <th className="py-1 text-right font-medium">Quemadas</th>
-                  <th className="py-1 text-right font-medium">Déficit</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {[...days].reverse().map((d) => (
-                  <tr key={d.date}>
-                    <td className="py-1.5">{longDate(d.date)}</td>
-                    <td className="py-1.5 text-right">{fmt(d.consumed)}</td>
-                    <td className="py-1.5 text-right">{fmt(d.burned)}</td>
-                    <td className="py-1.5 text-right">{d.deficit === null ? "—" : fmt(d.deficit)}</td>
+            <div className="-mx-1 overflow-x-auto px-1">
+              <table className="tabular mt-2 w-full min-w-[18.5rem] text-left text-[13px]">
+                <thead className="text-[11px] text-muted">
+                  <tr>
+                    <th className="py-1 font-medium">Día</th>
+                    <th className="py-1 pl-2 text-right font-medium">Consumidas</th>
+                    <th className="py-1 pl-2 text-right font-medium">Quemadas</th>
+                    <th className="py-1 pl-2 text-right font-medium">Déficit</th>
+                    <th className="py-1 pl-2 text-right font-medium">Acumulado</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {[...rows].reverse().map((d) => (
+                    <tr key={d.date}>
+                      <td className="whitespace-nowrap py-1.5">{shortDate(d.date)}</td>
+                      <td className="py-1.5 pl-2 text-right">{fmt(d.consumed)}</td>
+                      <td className="py-1.5 pl-2 text-right">{d.burned === null ? "—" : fmt(d.burned)}</td>
+                      <td className="py-1.5 pl-2 text-right font-semibold">{d.deficit === null ? "—" : fmt(d.deficit)}</td>
+                      <td className="py-1.5 pl-2 text-right">{d.cumulative === null ? "—" : fmt(d.cumulative)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p className="mt-2 text-xs text-muted">
-              Déficit = gasto del día (Apple Fitness o estimado con tu perfil) − comidas. Negativo = superávit.
+              Déficit = quemadas − consumidas (negativo = superávit). Solo cuentan los días con comidas
+              registradas. El gasto de los días sin Apple Fitness se estima con tu perfil. Como referencia,
+              {" "}
+              {fmt(KCAL_PER_KG)} kcal ≈ 1 kg de grasa; el peso real también varía por el agua y otros factores.
             </p>
           </details>
         </Card>

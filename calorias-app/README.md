@@ -29,7 +29,11 @@ App personal (estilo Fitia) para registrar lo que comes con una foto y las calor
   - Desde Hoy, «¿Qué como?» en cada comida abre sus opciones.
 - **Meta diaria** calculada con Mifflin-St Jeor según sexo, edad, altura, peso, actividad y objetivo. También puedes fijarla a mano.
 - **Resumen del día:** restantes = meta − comidas + ejercicio, macros y agua.
-- **Progreso:** calorías por día (7 o 30 días), déficit medio, peso y días dentro de la meta.
+- **Progreso:** calorías consumidas y quemadas por día (7 o 30 días) y, debajo, el déficit de cada
+  día (superávit si comes más de lo que gastas); recuadros con el déficit acumulado (y su equivalente
+  en grasa), el consumo, el gasto y el déficit medios; tabla con el acumulado día a día; peso y días
+  dentro de la meta. «Quemadas» es el gasto total del día (Apple Fitness o estimado con el perfil) y
+  solo cuentan los días con comidas registradas.
 - **Se instala en el celular** (Compartir → "Agregar a inicio" en iPhone).
 
 ## Cuentas para la familia
