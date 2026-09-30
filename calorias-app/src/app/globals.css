@@ -31,6 +31,8 @@
   --carbs: #eda100;
   --fat: #4a3aa7;
   --water: #2a78d6;
+  /* Déficit del día: azul de la paleta validada junto a kcal y quemadas (los tres pasan todos los pares). */
+  --deficit: #2a78d6;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -61,6 +63,7 @@
     --carbs: #c98500;
     --fat: #9085e9;
     --water: #3987e5;
+    --deficit: #3987e5;
   }
 }
 
@@ -87,6 +90,7 @@
   --color-carbs: var(--carbs);
   --color-fat: var(--fat);
   --color-water: var(--water);
+  --color-deficit: var(--deficit);
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
 }

@@ -56,13 +56,36 @@ function LineKey({ color, dashed }: { color: string; dashed?: boolean }) {
 export interface DayPoint {
   date: string;
   consumed: number;
-  burned: number;
+  /** Gasto total del día (Apple Fitness o estimado); null si no hay datos de gasto */
+  burned: number | null;
+  /** El gasto no viene del reloj: se estimó con el perfil */
+  estimated: boolean;
+  /** quemadas − consumidas (negativo = superávit); null si el día no cuenta */
+  deficit: number | null;
 }
 
 const PLOT_H = 170;
 const AXIS_H = 26;
+/** Fila del título del panel de déficit, con sitio para las etiquetas sobre las barras. */
+const CAP_H = 30;
+const DEF_H = 64;
+/** Sitio para las etiquetas bajo las barras de superávit. */
+const BELOW_H = 14;
 
-/** Calorías consumidas y quemadas por día (columnas agrupadas) con la meta como umbral. */
+/** Columna que crece hacia abajo desde la línea base: base recta y 4 px redondeados abajo. */
+function barPathDown(x: number, y: number, w: number, h: number) {
+  if (h <= 0 || w <= 0) return "";
+  const r = Math.min(4, w / 2, h);
+  const b = y + h;
+  return `M${x},${y}V${b - r}Q${x},${b} ${x + r},${b}H${x + w - r}Q${x + w},${b} ${x + w},${b - r}V${y}Z`;
+}
+
+const signed = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${fmt(Math.abs(v))}`;
+
+/**
+ * Calorías consumidas y quemadas por día (columnas agrupadas, con la meta como umbral) y, debajo
+ * y alineado por día, su diferencia: el déficit hacia arriba y el superávit hacia abajo.
+ */
 export function CaloriesChart({ days, goal }: { days: DayPoint[]; goal: number }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
@@ -71,7 +94,7 @@ export function CaloriesChart({ days, goal }: { days: DayPoint[]; goal: number }
   const right = 6;
   const top = 8;
   const plotW = Math.max(0, width - left - right);
-  const maxVal = Math.max(goal, ...days.map((d) => Math.max(d.consumed, d.burned)));
+  const maxVal = Math.max(goal, ...days.map((d) => Math.max(d.consumed, d.burned ?? 0)));
   const step = niceStep(maxVal * 1.1);
   const yMax = Math.max(step, Math.ceil((maxVal * 1.08) / step) * step);
   const y = (v: number) => top + PLOT_H - (v / yMax) * PLOT_H;
@@ -83,6 +106,38 @@ export function CaloriesChart({ days, goal }: { days: DayPoint[]; goal: number }
   const groupW = barW * 2 + gap;
   const dense = days.length > 10;
 
+  // Panel del déficit: una escala propia, con el cero donde se reparte lo de arriba y lo de abajo.
+  const deficits = days.flatMap((d) => (d.deficit === null ? [] : [d.deficit]));
+  const showDeficit = deficits.length > 0;
+  const posMax = Math.max(0, ...deficits);
+  const negMax = Math.max(0, ...deficits.map((v) => -v));
+  const dStep = niceStep(Math.max(posMax, negMax, 1) * 1.1, 2);
+  const dUp = Math.max(0, Math.ceil((posMax * 1.05) / dStep) * dStep);
+  const dDown = Math.max(0, Math.ceil((negMax * 1.05) / dStep) * dStep);
+  const dSpan = Math.max(dUp + dDown, dStep);
+  const mainBottom = top + PLOT_H;
+  const defTop = mainBottom + CAP_H;
+  const defBottom = defTop + DEF_H;
+  const dy = (v: number) => defTop + ((dUp - v) / dSpan) * DEF_H;
+  const dTicks: number[] = [];
+  for (let t = -dDown; t <= dUp + 1e-9; t += dStep) dTicks.push(Math.round(t) || 0);
+  const plotBottom = showDeficit ? defBottom + BELOW_H : mainBottom;
+  const height = plotBottom + AXIS_H;
+
+  // Etiquetas directas solo en lo que cuenta: el último día, el mayor déficit y el mayor superávit.
+  const labelled = new Set<number>();
+  if (showDeficit) {
+    const idx = days.flatMap((d, i) => (d.deficit === null ? [] : [i]));
+    const value = (i: number) => days[i].deficit as number;
+    const best = idx.reduce((b, i) => (value(i) > value(b) ? i : b), idx[0]);
+    const worst = idx.reduce((b, i) => (value(i) < value(b) ? i : b), idx[0]);
+    const picks = [idx[idx.length - 1]];
+    if (value(best) > 0) picks.push(best);
+    if (value(worst) < 0) picks.push(worst);
+    // Sin encimarse: cada etiqueta necesita unos 38 px de sitio.
+    for (const i of picks) if ([...labelled].every((j) => Math.abs(j - i) * band >= 38)) labelled.add(i);
+  }
+
   const tip = active !== null ? days[active] : null;
   const tipX = active !== null ? left + band * active + band / 2 : 0;
 
@@ -91,10 +146,14 @@ export function CaloriesChart({ days, goal }: { days: DayPoint[]; goal: number }
       {width > 0 ? (
         <svg
           width={width}
-          height={top + PLOT_H + AXIS_H}
+          height={height}
           role="img"
-          aria-label="Calorías consumidas y quemadas por día"
+          aria-label="Calorías consumidas, quemadas y déficit por día"
         >
+          {active !== null ? (
+            <rect x={left + band * active + 1} y={top} width={band - 2} height={plotBottom - top} rx="6" fill="var(--field)" />
+          ) : null}
+
           {ticks.map((t) => (
             <g key={t}>
               <line x1={left} x2={width - right} y1={y(t)} y2={y(t)} stroke={t === 0 ? "var(--baseline)" : "var(--grid)"} strokeWidth="1" />
@@ -104,20 +163,70 @@ export function CaloriesChart({ days, goal }: { days: DayPoint[]; goal: number }
             </g>
           ))}
 
+          {showDeficit ? (
+            <g>
+              <rect x={left} y={mainBottom + 5} width="8" height="8" rx="2" fill="var(--deficit)" />
+              <text x={left + 12} y={mainBottom + 13} className="fill-ink-2 text-[10px]">
+                Déficit · lo de abajo es superávit
+              </text>
+              {dTicks.map((t) => (
+                <g key={t}>
+                  <line
+                    x1={left}
+                    x2={width - right}
+                    y1={dy(t)}
+                    y2={dy(t)}
+                    stroke={t === 0 ? "var(--baseline)" : "var(--grid)"}
+                    strokeWidth="1"
+                  />
+                  <text x={left - 6} y={dy(t)} dy="0.32em" textAnchor="end" className="tabular fill-muted text-[10px]">
+                    {fmt(t)}
+                  </text>
+                </g>
+              ))}
+            </g>
+          ) : null}
+
           {days.map((d, i) => {
             const x0 = left + band * i;
             const gx = x0 + (band - groupW) / 2;
+            const dw = Math.min(24, groupW);
+            const dx = x0 + (band - dw) / 2;
+            const v = d.deficit;
+            const cx = x0 + band / 2;
+            const anchor = cx < left + 18 ? "start" : cx > width - right - 18 ? "end" : "middle";
+            const lx = anchor === "start" ? left : anchor === "end" ? width - right : cx;
             return (
               <g key={d.date}>
-                {active === i ? (
-                  <rect x={x0 + 1} y={top} width={band - 2} height={PLOT_H} rx="6" fill="var(--field)" />
-                ) : null}
                 <path d={barPath(gx, y(d.consumed), barW, y(0) - y(d.consumed))} fill="var(--kcal)" />
-                <path d={barPath(gx + barW + gap, y(d.burned), barW, y(0) - y(d.burned))} fill="var(--burn)" />
+                {d.burned !== null ? (
+                  <path d={barPath(gx + barW + gap, y(d.burned), barW, y(0) - y(d.burned))} fill="var(--burn)" />
+                ) : null}
+                {showDeficit && v !== null && v !== 0 ? (
+                  <path
+                    d={v > 0 ? barPath(dx, dy(v), dw, dy(0) - dy(v)) : barPathDown(dx, dy(0), dw, dy(v) - dy(0))}
+                    fill="var(--deficit)"
+                  />
+                ) : null}
+                {labelled.has(i) && v !== null ? (
+                  <text
+                    x={lx}
+                    y={v >= 0 ? dy(v) - 4 : dy(v) + 11}
+                    textAnchor={anchor}
+                    className="tabular fill-ink-2 text-[10px] font-semibold"
+                    // Halo del color de la tarjeta: la cifra se lee aunque pase sobre una barra vecina.
+                    stroke="var(--card)"
+                    strokeWidth="3"
+                    strokeLinejoin="round"
+                    paintOrder="stroke"
+                  >
+                    {signed(v)}
+                  </text>
+                ) : null}
                 {!dense || i % 5 === days.length % 5 || i === days.length - 1 ? (
                   <text
                     x={x0 + band / 2}
-                    y={top + PLOT_H + 16}
+                    y={plotBottom + 16}
                     textAnchor="middle"
                     className="fill-muted text-[10px]"
                   >
@@ -128,10 +237,12 @@ export function CaloriesChart({ days, goal }: { days: DayPoint[]; goal: number }
                   x={x0}
                   y={top}
                   width={band}
-                  height={PLOT_H + AXIS_H}
+                  height={height - top}
                   fill="transparent"
                   tabIndex={0}
-                  aria-label={`${longDate(d.date)}: ${fmt(d.consumed)} kcal consumidas, ${fmt(d.burned)} quemadas`}
+                  aria-label={`${longDate(d.date)}: ${fmt(d.consumed)} kcal consumidas, ${
+                    d.burned === null ? "sin dato de gasto" : `${fmt(d.burned)} quemadas${d.estimated ? " (estimado)" : ""}`
+                  }${v === null ? "" : `, ${v < 0 ? "superávit" : "déficit"} de ${fmt(Math.abs(v))} kcal`}`}
                   onPointerEnter={() => setActive(i)}
                   onPointerDown={() => setActive(i)}
                   onFocus={() => setActive(i)}
@@ -156,18 +267,34 @@ export function CaloriesChart({ days, goal }: { days: DayPoint[]; goal: number }
           ) : null}
         </svg>
       ) : (
-        <div style={{ height: top + PLOT_H + AXIS_H }} />
+        <div style={{ height }} />
       )}
 
       {tip ? (
         <div
-          className="pointer-events-none absolute top-0 z-10 w-52 -translate-x-1/2 rounded-2xl bg-card p-2.5 text-xs shadow-lg ring-1 ring-border"
-          style={{ left: Math.min(Math.max(tipX, 104), width - 104) }}
+          className="pointer-events-none absolute top-0 z-10 w-56 -translate-x-1/2 rounded-2xl bg-card p-2.5 text-xs shadow-lg ring-1 ring-border"
+          style={{ left: Math.min(Math.max(tipX, 112), width - 112) }}
         >
           <p className="mb-1 font-semibold text-ink">{longDate(tip.date)}</p>
           <TipRow color="var(--kcal)" label="Consumidas" value={`${fmt(tip.consumed)} kcal`} />
-          <TipRow color="var(--burn)" label="Quemadas" value={`${fmt(tip.burned)} kcal`} />
+          <TipRow
+            color="var(--burn)"
+            label="Quemadas"
+            value={tip.burned === null ? "—" : `${fmt(tip.burned)} kcal`}
+          />
           <TipRow color="var(--ink-2)" dashed label="Meta" value={`${fmt(goal)} kcal`} />
+          <TipRow
+            color="var(--deficit)"
+            label={tip.deficit !== null && tip.deficit < 0 ? "Superávit" : "Déficit"}
+            value={tip.deficit === null ? "—" : `${fmt(Math.abs(tip.deficit))} kcal`}
+          />
+          {tip.deficit === null ? (
+            <p className="mt-1 text-[11px] text-muted">
+              {tip.consumed > 0 ? "Sin dato de gasto para este día." : "Sin comidas registradas este día."}
+            </p>
+          ) : tip.estimated ? (
+            <p className="mt-1 text-[11px] text-muted">Gasto estimado con tu perfil (sin Apple Fitness).</p>
+          ) : null}
         </div>
       ) : null}
     </div>
