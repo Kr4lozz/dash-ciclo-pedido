@@ -14,14 +14,24 @@ import type { DataPut, DayDoc, ServerData } from "./schemas";
 import { toast } from "./toast";
 import {
   MEALS,
+  MODE_IDS,
+  MUSCLE_IDS,
   type AppData,
   type DayBurn,
   type ExerciseEntry,
+  type ExerciseMode,
   type FoodEntry,
   type FoodSource,
+  type GymExercise,
+  type GymSet,
   type MealType,
+  type MuscleGroup,
   type Profile,
+  type Routine,
+  type RoutineExercise,
   type WeightEntry,
+  type Workout,
+  type WorkoutExercise,
 } from "./types";
 
 const LOCAL_KEY = "mis-calorias:v1";
@@ -38,6 +48,9 @@ const EMPTY: AppData = {
   water: {},
   burned: {},
   weights: [],
+  workouts: [],
+  routines: [],
+  customExercises: [],
 };
 
 export type StoreMode = { kind: "none" } | { kind: "local" } | { kind: "user"; uid: string };
@@ -201,6 +214,8 @@ interface Dirty {
   days?: string[];
   profile?: boolean;
   weights?: boolean;
+  /** rutinas y ejercicios propios */
+  gym?: boolean;
   /** reemplazar todo (importar respaldo o borrar todo) */
   replace?: boolean;
 }
@@ -301,6 +316,84 @@ export function setBurned(date: string, burn: DayBurn) {
   );
 }
 
+// ---------- Gym ----------
+
+export type NewWorkout = Omit<Workout, "id" | "createdAt"> & { id?: string; createdAt?: number };
+
+/** Guarda un entrenamiento nuevo, o reemplaza el que tenga el mismo id. */
+export function saveWorkout(w: NewWorkout): Workout | null {
+  const before = w.id ? data.workouts.find((x) => x.id === w.id) : undefined;
+  const entry = normalizeWorkout({
+    ...w,
+    id: w.id ?? uid(),
+    createdAt: w.createdAt ?? before?.createdAt ?? Date.now(),
+  });
+  if (!entry) return null;
+  update(
+    (d) => ({
+      ...d,
+      workouts: before
+        ? d.workouts.map((x) => (x.id === entry.id ? entry : x))
+        : [...d.workouts, entry],
+    }),
+    { days: [entry.date, before?.date ?? entry.date] },
+  );
+  return entry;
+}
+
+export function deleteWorkout(id: string) {
+  const before = data.workouts.find((w) => w.id === id);
+  if (!before) return;
+  update((d) => ({ ...d, workouts: d.workouts.filter((w) => w.id !== id) }), { days: [before.date] });
+}
+
+export type NewRoutine = Omit<Routine, "id" | "createdAt"> & { id?: string; createdAt?: number };
+
+/** Guarda una rutina nueva, o reemplaza la que tenga el mismo id. */
+export function saveRoutine(r: NewRoutine): Routine | null {
+  const before = r.id ? data.routines.find((x) => x.id === r.id) : undefined;
+  const entry = normalizeRoutine({
+    ...r,
+    id: r.id ?? uid(),
+    createdAt: r.createdAt ?? before?.createdAt ?? Date.now(),
+  });
+  if (!entry) return null;
+  update(
+    (d) => ({
+      ...d,
+      routines: before
+        ? d.routines.map((x) => (x.id === entry.id ? entry : x))
+        : [...d.routines, entry],
+    }),
+    { gym: true },
+  );
+  return entry;
+}
+
+export function deleteRoutine(id: string) {
+  if (!data.routines.some((r) => r.id === id)) return;
+  update((d) => ({ ...d, routines: d.routines.filter((r) => r.id !== id) }), { gym: true });
+}
+
+/** Crea un ejercicio propio; si ya hay uno con ese nombre y grupo, devuelve el existente. */
+export function addCustomExercise(e: Omit<GymExercise, "id">): GymExercise | null {
+  const entry = normalizeCustomExercise({ ...e, id: `x-${uid()}` });
+  if (!entry) return null;
+  const same = data.customExercises.find(
+    (x) => x.muscle === entry.muscle && x.name.toLowerCase() === entry.name.toLowerCase(),
+  );
+  if (same) return same;
+  update((d) => ({ ...d, customExercises: [...d.customExercises, entry] }), { gym: true });
+  return entry;
+}
+
+export function deleteCustomExercise(id: string) {
+  if (!data.customExercises.some((x) => x.id === id)) return;
+  update((d) => ({ ...d, customExercises: d.customExercises.filter((x) => x.id !== id) }), {
+    gym: true,
+  });
+}
+
 // ---------- Perfil y peso ----------
 
 export function saveProfile(p: Profile) {
@@ -366,6 +459,8 @@ export interface LegacySummary {
   exercises: number;
   /** días con calorías de Apple Fitness */
   burned: number;
+  workouts: number;
+  routines: number;
   weights: number;
   profile: boolean;
 }
@@ -380,10 +475,19 @@ export function legacySummary(): LegacySummary | null {
     foods: d.foods.length,
     exercises: d.exercises.length,
     burned: Object.keys(d.burned).length,
+    workouts: d.workouts.length,
+    routines: d.routines.length,
     weights: d.weights.length,
     profile: d.profile !== null,
   };
-  const any = summary.foods || summary.exercises || summary.burned || summary.weights || summary.profile;
+  const any =
+    summary.foods ||
+    summary.exercises ||
+    summary.burned ||
+    summary.workouts ||
+    summary.routines ||
+    summary.weights ||
+    summary.profile;
   return any ? summary : null;
 }
 
@@ -398,10 +502,17 @@ export function migrateLegacyData() {
   const exercises = legacy.exercises.filter((e) => !exerciseIds.has(e.id));
   const waterDates = Object.keys(legacy.water).filter((d) => !data.water[d]);
   const burnedDates = Object.keys(legacy.burned).filter((d) => !data.burned[d]);
+  const workoutIds = new Set(data.workouts.map((w) => w.id));
+  const routineIds = new Set(data.routines.map((r) => r.id));
+  const customIds = new Set(data.customExercises.map((x) => x.id));
+  const workouts = legacy.workouts.filter((w) => !workoutIds.has(w.id));
+  const routines = legacy.routines.filter((r) => !routineIds.has(r.id));
+  const customExercises = legacy.customExercises.filter((x) => !customIds.has(x.id));
   const weightDates = new Set(data.weights.map((w) => w.date));
   const days = new Set([
     ...foods.map((f) => f.date),
     ...exercises.map((e) => e.date),
+    ...workouts.map((w) => w.date),
     ...waterDates,
     ...burnedDates,
   ]);
@@ -418,8 +529,16 @@ export function migrateLegacyData() {
       weights: [...d.weights, ...legacy.weights.filter((w) => !weightDates.has(w.date))].sort((a, b) =>
         a.date.localeCompare(b.date),
       ),
+      workouts: [...d.workouts, ...workouts],
+      routines: [...d.routines, ...routines],
+      customExercises: [...d.customExercises, ...customExercises],
     }),
-    { days: [...days], weights: true, profile: takeProfile },
+    {
+      days: [...days],
+      weights: true,
+      profile: takeProfile,
+      gym: routines.length > 0 || customExercises.length > 0,
+    },
   );
   archiveLegacy();
 }
@@ -440,7 +559,7 @@ function archiveLegacy() {
 
 // ---------- Sincronización con la cuenta ----------
 
-let pending = new Map<string, number>(); // "day:2026-09-27" | "profile" | "weights" | "replace" → secuencia
+let pending = new Map<string, number>(); // "day:2026-09-27" | "profile" | "weights" | "gym" | "replace" → secuencia
 let seq = 0;
 let flushing = false;
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
@@ -465,6 +584,7 @@ function markDirty(d: Dirty) {
   if (d.replace) mark("replace");
   if (d.profile) mark("profile");
   if (d.weights) mark("weights");
+  if (d.gym) mark("gym");
   for (const date of new Set(d.days ?? [])) mark(`day:${date}`);
   persistPending();
   syncState = "pending";
@@ -485,6 +605,7 @@ function groupByDay(): Map<string, DayDoc> {
         exercises: [],
         water: data.water[date] ?? 0,
         burned: data.burned[date] ?? null,
+        workouts: [],
       };
       days.set(date, doc);
     }
@@ -492,6 +613,7 @@ function groupByDay(): Map<string, DayDoc> {
   };
   for (const f of data.foods) day(f.date).foods.push(f);
   for (const e of data.exercises) day(e.date).exercises.push(e);
+  for (const w of data.workouts) day(w.date).workouts?.push(w);
   for (const [date, ml] of Object.entries(data.water)) if (ml > 0) day(date);
   for (const date of Object.keys(data.burned)) day(date);
   return days;
@@ -508,6 +630,9 @@ function buildPayloads(): DataPut[] {
   if (replace) first.replace = true;
   if (replace || pending.has("profile")) first.profile = data.profile;
   if (replace || pending.has("weights")) first.weights = data.weights;
+  if (replace || pending.has("gym")) {
+    first.gym = { routines: data.routines, custom: data.customExercises };
+  }
   const payloads: DataPut[] = [first];
   for (let i = 0; i < dates.length; i += 150) {
     const chunk = Object.fromEntries(dates.slice(i, i + 150).map((d) => [d, days.get(d) ?? null]));
@@ -625,6 +750,9 @@ function mergeRemote(server: ServerData): AppData {
     exercises: Object.values(days).flatMap((d) => d.exercises ?? []),
     water: Object.fromEntries(Object.entries(days).map(([date, d]) => [date, d.water ?? 0])),
     burned: Object.fromEntries(Object.entries(days).map(([date, d]) => [date, d.burned ?? null])),
+    workouts: Object.values(days).flatMap((d) => d.workouts ?? []),
+    routines: server.gym?.routines ?? [],
+    customExercises: server.gym?.custom ?? [],
   });
   // Lo que todavía no se envió manda sobre lo que hay en el servidor.
   const localDays = new Set(
@@ -648,6 +776,9 @@ function mergeRemote(server: ServerData): AppData {
     exercises: keepLocal(remote.exercises, data.exercises),
     water,
     burned,
+    workouts: keepLocal(remote.workouts, data.workouts),
+    routines: pending.has("gym") ? data.routines : remote.routines,
+    customExercises: pending.has("gym") ? data.customExercises : remote.customExercises,
   };
 }
 
@@ -656,6 +787,7 @@ export function forgetUserCache(uidToForget: string) {
   removeKey(userKey(uidToForget));
   removeKey(pendingKey(uidToForget));
   removeKey(userScopedKey("menu", uidToForget));
+  removeKey(userScopedKey("gym-draft", uidToForget));
 }
 
 /** Clave de este dispositivo para datos propios de cada cuenta (o del modo local). */
@@ -808,6 +940,109 @@ function normalizeBurn(v: unknown): DayBurn | null {
   return burn.total === null && burn.active === null ? null : burn;
 }
 
+const MUSCLE_SET = new Set<string>(MUSCLE_IDS);
+const MODE_SET = new Set<string>(MODE_IDS);
+
+const clampNum = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+function normalizeSet(v: unknown): GymSet | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const kg = Math.round(clampNum(num(o.kg), 0, 1000) * 100) / 100;
+  const reps = Math.round(clampNum(num(o.reps), 0, 1000));
+  const sec = Math.round(clampNum(num(o.sec), 0, 86400));
+  return kg > 0 || reps > 0 || sec > 0 ? { kg, reps, sec } : null;
+}
+
+/** Grupo y tipo de un ejercicio, con un valor razonable si el dato viene dañado. */
+function exerciseKind(o: Record<string, unknown>): { muscle: MuscleGroup; mode: ExerciseMode } {
+  return {
+    muscle: (MUSCLE_SET.has(str(o.muscle)) ? o.muscle : "core") as MuscleGroup,
+    mode: (MODE_SET.has(str(o.mode)) ? o.mode : "peso") as ExerciseMode,
+  };
+}
+
+function normalizeWorkoutExercise(v: unknown): WorkoutExercise | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const name = str(o.name).trim().slice(0, 80);
+  const exerciseId = str(o.exerciseId).slice(0, 64);
+  if (!name || !exerciseId) return null;
+  const sets = (Array.isArray(o.sets) ? o.sets : [])
+    .map(normalizeSet)
+    .filter((s): s is GymSet => s !== null)
+    .slice(0, 40);
+  // Un ejercicio sin series hechas no es parte del entrenamiento.
+  if (sets.length === 0) return null;
+  return { exerciseId, name, ...exerciseKind(o), note: str(o.note).trim().slice(0, 300), sets };
+}
+
+function normalizeWorkout(v: unknown): Workout | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (!isValidDateStr(o.date)) return null;
+  const exercises = (Array.isArray(o.exercises) ? o.exercises : [])
+    .map(normalizeWorkoutExercise)
+    .filter((e): e is WorkoutExercise => e !== null)
+    .slice(0, 40);
+  if (exercises.length === 0) return null;
+  const minutes = o.minutes == null ? null : Math.round(clampNum(num(o.minutes), 0, 1440));
+  return {
+    id: str(o.id).slice(0, 64) || uid(),
+    date: o.date,
+    name: str(o.name).trim().slice(0, 80) || "Entrenamiento",
+    routineId: str(o.routineId).slice(0, 64) || null,
+    minutes: minutes || null,
+    note: str(o.note).trim().slice(0, 500),
+    exercises,
+    createdAt: num(o.createdAt, Date.now()),
+  };
+}
+
+function normalizeRoutineExercise(v: unknown): RoutineExercise | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const name = str(o.name).trim().slice(0, 80);
+  const exerciseId = str(o.exerciseId).slice(0, 64);
+  if (!name || !exerciseId) return null;
+  return {
+    exerciseId,
+    name,
+    ...exerciseKind(o),
+    sets: Math.round(clampNum(num(o.sets, 3), 1, 20)),
+    reps: Math.round(clampNum(num(o.reps), 0, 100)),
+    sec: Math.round(clampNum(num(o.sec), 0, 3600)),
+  };
+}
+
+function normalizeRoutine(v: unknown): Routine | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  return {
+    id: str(o.id).slice(0, 64) || uid(),
+    name: str(o.name).trim().slice(0, 80) || "Rutina",
+    note: str(o.note).trim().slice(0, 300),
+    exercises: (Array.isArray(o.exercises) ? o.exercises : [])
+      .map(normalizeRoutineExercise)
+      .filter((e): e is RoutineExercise => e !== null)
+      .slice(0, 40),
+    createdAt: num(o.createdAt, Date.now()),
+  };
+}
+
+function normalizeCustomExercise(v: unknown): GymExercise | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const name = str(o.name).trim().slice(0, 80);
+  if (!name) return null;
+  return { id: str(o.id).slice(0, 64) || `x-${uid()}`, name, ...exerciseKind(o) };
+}
+
+/** Sin repetidos por id (queda el último). */
+function uniqueById<T extends { id: string }>(list: T[]): T[] {
+  return [...new Map(list.map((x) => [x.id, x])).values()];
+}
+
 function normalizeData(raw: unknown): AppData {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const list = (v: unknown) => (Array.isArray(v) ? v : []);
@@ -843,5 +1078,20 @@ function normalizeData(raw: unknown): AppData {
     water,
     burned,
     weights,
+    workouts: uniqueById(
+      list(o.workouts)
+        .map(normalizeWorkout)
+        .filter((w): w is Workout => w !== null),
+    ),
+    routines: uniqueById(
+      list(o.routines)
+        .map(normalizeRoutine)
+        .filter((r): r is Routine => r !== null),
+    ).slice(0, 100),
+    customExercises: uniqueById(
+      list(o.customExercises)
+        .map(normalizeCustomExercise)
+        .filter((x): x is GymExercise => x !== null),
+    ).slice(0, 200),
   };
 }

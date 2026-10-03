@@ -12,7 +12,7 @@ export async function GET() {
   return json(await readData(user.id));
 }
 
-/** Guarda cambios: perfil, pesos y/o días completos (null borra el día). */
+/** Guarda cambios: perfil, pesos, rutinas y/o días completos (null borra el día). */
 export async function PUT(req: Request) {
   const blocked = crossSite(req);
   if (blocked) return blocked;
@@ -27,7 +27,7 @@ export async function PUT(req: Request) {
   const days = parsed.data.days ?? {};
   if (Object.keys(days).length > 2000) return json({ error: "Demasiados días en una sola solicitud." }, 413);
   for (const [date, doc] of Object.entries(days)) {
-    if (doc && [...doc.foods, ...doc.exercises].some((e) => e.date !== date)) {
+    if (doc && [...doc.foods, ...doc.exercises, ...(doc.workouts ?? [])].some((e) => e.date !== date)) {
       return json({ error: "Datos inválidos." }, 400);
     }
   }

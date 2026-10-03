@@ -8,6 +8,7 @@ import {
   ChartColumn,
   ChevronLeft,
   Droplet,
+  Dumbbell,
   History,
   Scale,
   ShieldCheck,
@@ -52,6 +53,11 @@ const FEATURES: { Icon: typeof Camera; title: string; text: string }[] = [
     text: "En Menú eliges la comida y ves platos caseros peruanos y económicos, o ingredientes por grupo, con los gramos que te tocan según tu meta y tus macros. También puedes pedir el día completo armado.",
   },
   {
+    Icon: Dumbbell,
+    title: "Gym y rutinas",
+    text: "Anota cada ejercicio con el peso y las repeticiones de cada serie, arma y guarda tus rutinas y mira en Progreso tu volumen, tus récords y cómo sube el peso de cada ejercicio.",
+  },
+  {
     Icon: Target,
     title: "Tu meta diaria",
     text: "Con tu edad, altura, peso, actividad y objetivo calculamos cuántas calorías te tocan al día. Te queda: meta − comidas + ejercicio.",
@@ -59,7 +65,7 @@ const FEATURES: { Icon: typeof Camera; title: string; text: string }[] = [
   {
     Icon: ChartColumn,
     title: "Progreso",
-    text: "Mira tus calorías consumidas y quemadas de los últimos 7 o 30 días con el déficit de cada día, el déficit acumulado, cuántos días cumpliste la meta y cómo evoluciona tu peso.",
+    text: "Mira tus calorías consumidas y quemadas de los últimos 7 o 30 días con el déficit de cada día y el acumulado, tu entrenamiento (volumen, músculos y récords), cuántos días cumpliste la meta y cómo evoluciona tu peso.",
   },
   {
     Icon: Droplet,

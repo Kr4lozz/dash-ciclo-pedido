@@ -33,6 +33,8 @@
   --water: #2a78d6;
   /* Déficit del día: azul de la paleta validada junto a kcal y quemadas (los tres pasan todos los pares). */
   --deficit: #2a78d6;
+  /* Entrenamiento: el violeta de la paleta validada (una sola serie por gráfico). */
+  --gym: #4a3aa7;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -64,6 +66,7 @@
     --fat: #9085e9;
     --water: #3987e5;
     --deficit: #3987e5;
+    --gym: #9085e9;
   }
 }
 
@@ -91,6 +94,7 @@
   --color-fat: var(--fat);
   --color-water: var(--water);
   --color-deficit: var(--deficit);
+  --color-gym: var(--gym);
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
 }

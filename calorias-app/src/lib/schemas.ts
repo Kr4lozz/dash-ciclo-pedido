@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MODE_IDS, MUSCLE_IDS } from "./types";
 
 // Validación de los datos que el cliente guarda en su cuenta.
 
@@ -34,12 +35,77 @@ export const DayBurnSchema = z.object({
   active: amount(20000).nullable(),
 });
 
+const Muscle = z.enum(MUSCLE_IDS);
+const Mode = z.enum(MODE_IDS);
+
+export const GymExerciseSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(80),
+  muscle: Muscle,
+  mode: Mode,
+});
+
+const GymSetSchema = z.object({
+  kg: amount(1000),
+  reps: amount(1000),
+  sec: amount(86400),
+});
+
+export const WorkoutSchema = z.object({
+  id: z.string().min(1).max(64),
+  date: DateStr,
+  name: z.string().max(80),
+  routineId: z.string().max(64).nullable(),
+  minutes: amount(1440).nullable(),
+  note: z.string().max(500),
+  exercises: z
+    .array(
+      z.object({
+        exerciseId: z.string().min(1).max(64),
+        name: z.string().min(1).max(80),
+        muscle: Muscle,
+        mode: Mode,
+        note: z.string().max(300),
+        sets: z.array(GymSetSchema).max(40),
+      }),
+    )
+    .max(40),
+  createdAt: z.number().finite(),
+});
+
+export const RoutineSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(80),
+  note: z.string().max(300),
+  exercises: z
+    .array(
+      z.object({
+        exerciseId: z.string().min(1).max(64),
+        name: z.string().min(1).max(80),
+        muscle: Muscle,
+        mode: Mode,
+        sets: amount(20),
+        reps: amount(100),
+        sec: amount(3600),
+      }),
+    )
+    .max(40),
+  createdAt: z.number().finite(),
+});
+
+/** Rutinas y ejercicios propios: se guardan juntos, no por día. */
+export const GymSchema = z.object({
+  routines: z.array(RoutineSchema).max(100),
+  custom: z.array(GymExerciseSchema).max(200),
+});
+
 /** Todo lo registrado en un día: la unidad que se sincroniza. */
 export const DayDocSchema = z.object({
   foods: z.array(FoodEntrySchema).max(300),
   exercises: z.array(ExerciseEntrySchema).max(100),
   water: amount(20000),
   burned: DayBurnSchema.nullable().optional(),
+  workouts: z.array(WorkoutSchema).max(10).optional(),
 });
 
 export const ProfileSchema = z.object({
@@ -65,15 +131,19 @@ export const DataPutSchema = z.object({
   replace: z.boolean().optional(),
   profile: ProfileSchema.nullable().optional(),
   weights: WeightsSchema.optional(),
+  /** rutinas y ejercicios propios */
+  gym: GymSchema.optional(),
   /** null borra el día */
   days: z.record(DateStr, DayDocSchema.nullable()).optional(),
 });
 
 export type DayDoc = z.infer<typeof DayDocSchema>;
 export type DataPut = z.infer<typeof DataPutSchema>;
+export type Gym = z.infer<typeof GymSchema>;
 
 export interface ServerData {
   profile: z.infer<typeof ProfileSchema> | null;
   weights: z.infer<typeof WeightsSchema>;
   days: Record<string, DayDoc>;
+  gym: Gym | null;
 }
