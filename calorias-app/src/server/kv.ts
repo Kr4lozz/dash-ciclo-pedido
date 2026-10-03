@@ -48,6 +48,7 @@ export const keys = {
   profile: (id: string) => `ud:${id}:profile`,
   weights: (id: string) => `ud:${id}:weights`,
   days: (id: string) => `ud:${id}:days`, // hash: fecha → día
+  gym: (id: string) => `ud:${id}:gym`, // rutinas y ejercicios propios
   rate: (scope: string, id: string) => `rl:${scope}:${id}`,
   ai: (id: string, day: string) => `ai:${id}:${day}`,
 };

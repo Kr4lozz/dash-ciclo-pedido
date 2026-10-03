@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { CaloriesChart, CaloriesLegend, WeightChart } from "@/components/Charts";
+import { GymProgress } from "@/components/GymProgress";
+import { Kpi } from "@/components/Meters";
 import { Button, Card, NumberInput, PageHeader, Segmented, Swatch } from "@/components/ui";
 import { lastNDays, longDate, shortDate, todayStr } from "@/lib/dates";
 import { fmt, fmt1, parseNum } from "@/lib/format";
@@ -18,8 +20,9 @@ export default function ProgresoPage() {
   const targets = useMemo(() => computeTargets(data.profile), [data.profile]);
   const today = todayStr();
 
+  const dates = useMemo(() => lastNDays(today, Number(range)), [today, range]);
+
   const days = useMemo(() => {
-    const dates = lastNDays(today, Number(range));
     return dates.map((date) => {
       const foods = data.foods.filter((f) => f.date === date);
       const consumed = foods.reduce((a, f) => a + f.calories, 0);
@@ -40,7 +43,7 @@ export default function ProgresoPage() {
         logged,
       };
     });
-  }, [data.foods, data.exercises, data.burned, targets, range, today]);
+  }, [data.foods, data.exercises, data.burned, targets, dates]);
 
   const logged = days.filter((d) => d.logged);
   const counted = days.filter((d) => d.deficit !== null);
@@ -72,6 +75,7 @@ export default function ProgresoPage() {
           ]}
         />
 
+        <SectionTitle>Alimentación</SectionTitle>
         <dl className="grid grid-cols-2 gap-2">
           <div className="col-span-2 rounded-3xl bg-card p-4 ring-1 ring-border">
             <dt className="flex items-center gap-1.5 text-xs text-ink-2">
@@ -143,20 +147,18 @@ export default function ProgresoPage() {
           </details>
         </Card>
 
+        <SectionTitle>Entrenamiento</SectionTitle>
+        <GymProgress workouts={data.workouts} dates={dates} />
+
+        <SectionTitle>Cuerpo</SectionTitle>
         <WeightCard />
       </main>
     </>
   );
 }
 
-function Kpi({ label, value, unit }: { label: string; value: string; unit: string }) {
-  return (
-    <div className="rounded-3xl bg-card p-3 ring-1 ring-border">
-      <dt className="text-xs text-ink-2">{label}</dt>
-      <dd className="mt-1 text-xl font-semibold">{value}</dd>
-      <dd className="text-[11px] text-muted">{unit}</dd>
-    </div>
-  );
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h2 className="px-1 pt-2 text-xs font-semibold uppercase tracking-wide text-ink-2">{children}</h2>;
 }
 
 function WeightCard() {

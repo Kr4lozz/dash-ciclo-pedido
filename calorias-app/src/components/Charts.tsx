@@ -334,8 +334,21 @@ export interface WeightPoint {
   kg: number;
 }
 
-/** Evolución del peso: línea de 2 px, punto final etiquetado y cursor que busca la fecha. */
-export function WeightChart({ points }: { points: WeightPoint[] }) {
+/**
+ * Evolución de un valor en el tiempo (el peso, o el peso levantado en un ejercicio): línea de 2 px,
+ * punto final etiquetado y cursor que busca la fecha.
+ */
+export function WeightChart({
+  points,
+  color = "var(--water)",
+  unit = "kg",
+  label = "Evolución del peso",
+}: {
+  points: WeightPoint[];
+  color?: string;
+  unit?: string;
+  label?: string;
+}) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
 
@@ -383,7 +396,7 @@ export function WeightChart({ points }: { points: WeightPoint[] }) {
           width={width}
           height={top + PLOT_H + AXIS_H}
           role="img"
-          aria-label="Evolución del peso"
+          aria-label={label}
           tabIndex={0}
           onKeyDown={onKey}
           onBlur={() => setActive(null)}
@@ -412,10 +425,10 @@ export function WeightChart({ points }: { points: WeightPoint[] }) {
           {active !== null ? (
             <line x1={x(active)} x2={x(active)} y1={top} y2={top + PLOT_H} stroke="var(--baseline)" strokeWidth="1" />
           ) : null}
-          <path d={path} fill="none" stroke="var(--water)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-          <circle cx={x(shown)} cy={y(points[shown].kg)} r="4" fill="var(--water)" stroke="var(--card)" strokeWidth="2" />
+          <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          <circle cx={x(shown)} cy={y(points[shown].kg)} r="4" fill={color} stroke="var(--card)" strokeWidth="2" />
           <text x={x(last) + 8} y={y(points[last].kg)} dy="0.32em" className="fill-ink text-xs font-semibold">
-            {fmt1(points[last].kg)} kg
+            {fmt1(points[last].kg)} {unit}
           </text>
         </svg>
       ) : (
@@ -426,8 +439,136 @@ export function WeightChart({ points }: { points: WeightPoint[] }) {
           className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-xl bg-card px-2.5 py-1.5 text-xs shadow-lg ring-1 ring-border"
           style={{ left: Math.min(Math.max(x(active), 60), width - 60) }}
         >
-          <span className="font-semibold text-ink">{fmt1(points[active].kg)} kg</span>{" "}
+          <span className="font-semibold text-ink">
+            {fmt1(points[active].kg)} {unit}
+          </span>{" "}
           <span className="text-ink-2">· {shortDate(points[active].date)}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+export interface TrainingDay {
+  date: string;
+  sessions: number;
+  sets: number;
+  volume: number;
+  minutes: number;
+  names: string[];
+}
+
+/** Volumen de entrenamiento por día (kg × repeticiones): una columna por día, una sola serie. */
+export function VolumeChart({ days }: { days: TrainingDay[] }) {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const [active, setActive] = useState<number | null>(null);
+
+  const left = 44;
+  const right = 6;
+  const top = 18;
+  const plotW = Math.max(0, width - left - right);
+  const maxVal = Math.max(1, ...days.map((d) => d.volume));
+  const step = niceStep(maxVal * 1.1);
+  const yMax = Math.max(step, Math.ceil((maxVal * 1.08) / step) * step);
+  const y = (v: number) => top + PLOT_H - (v / yMax) * PLOT_H;
+  const ticks = Array.from({ length: Math.floor(yMax / step) + 1 }, (_, i) => i * step);
+
+  const band = days.length ? plotW / days.length : 0;
+  const barW = Math.max(2, Math.min(24, band - 6));
+  const dense = days.length > 10;
+  // Etiqueta directa solo en el día de mayor volumen.
+  const peak = days.reduce((b, d, i) => (d.volume > (days[b]?.volume ?? 0) ? i : b), 0);
+  const tip = active !== null ? days[active] : null;
+  const tipX = active !== null ? left + band * active + band / 2 : 0;
+  const height = top + PLOT_H + AXIS_H;
+
+  return (
+    <div ref={ref} className="relative select-none" onPointerLeave={() => setActive(null)}>
+      {width > 0 ? (
+        <svg width={width} height={height} role="img" aria-label="Volumen de entrenamiento por día">
+          {active !== null ? (
+            <rect x={left + band * active + 1} y={top} width={band - 2} height={PLOT_H} rx="6" fill="var(--field)" />
+          ) : null}
+          {ticks.map((t) => (
+            <g key={t}>
+              <line x1={left} x2={width - right} y1={y(t)} y2={y(t)} stroke={t === 0 ? "var(--baseline)" : "var(--grid)"} strokeWidth="1" />
+              <text x={left - 6} y={y(t)} dy="0.32em" textAnchor="end" className="tabular fill-muted text-[10px]">
+                {fmt(t)}
+              </text>
+            </g>
+          ))}
+          {days.map((d, i) => {
+            const x0 = left + band * i;
+            const cx = x0 + band / 2;
+            const anchor = cx < left + 22 ? "start" : cx > width - right - 22 ? "end" : "middle";
+            return (
+              <g key={d.date}>
+                {d.volume > 0 ? (
+                  <path d={barPath(cx - barW / 2, y(d.volume), barW, y(0) - y(d.volume))} fill="var(--gym)" />
+                ) : null}
+                {i === peak && d.volume > 0 ? (
+                  <text
+                    x={anchor === "start" ? left : anchor === "end" ? width - right : cx}
+                    y={y(d.volume) - 5}
+                    textAnchor={anchor}
+                    className="tabular fill-ink-2 text-[10px] font-semibold"
+                    stroke="var(--card)"
+                    strokeWidth="3"
+                    strokeLinejoin="round"
+                    paintOrder="stroke"
+                  >
+                    {fmt(d.volume)}
+                  </text>
+                ) : null}
+                {!dense || i % 5 === days.length % 5 || i === days.length - 1 ? (
+                  <text x={cx} y={top + PLOT_H + 16} textAnchor="middle" className="fill-muted text-[10px]">
+                    {dense ? shortDate(d.date).split(" ")[0] : `${weekdayInitial(d.date)} ${shortDate(d.date).split(" ")[0]}`}
+                  </text>
+                ) : null}
+                <rect
+                  x={x0}
+                  y={top}
+                  width={band}
+                  height={height - top}
+                  fill="transparent"
+                  tabIndex={0}
+                  aria-label={`${longDate(d.date)}: ${
+                    d.sessions === 0
+                      ? "sin entrenamiento"
+                      : `${d.sessions} ${d.sessions === 1 ? "entrenamiento" : "entrenamientos"}, ${fmt(d.volume)} kg de volumen, ${d.sets} series`
+                  }`}
+                  onPointerEnter={() => setActive(i)}
+                  onPointerDown={() => setActive(i)}
+                  onFocus={() => setActive(i)}
+                  onBlur={() => setActive(null)}
+                  className="outline-none"
+                />
+              </g>
+            );
+          })}
+        </svg>
+      ) : (
+        <div style={{ height }} />
+      )}
+
+      {tip ? (
+        <div
+          className="pointer-events-none absolute top-0 z-10 w-56 -translate-x-1/2 rounded-2xl bg-card p-2.5 text-xs shadow-lg ring-1 ring-border"
+          style={{ left: Math.min(Math.max(tipX, 112), width - 112) }}
+        >
+          <p className="mb-1 font-semibold text-ink">{longDate(tip.date)}</p>
+          {tip.sessions === 0 ? (
+            <p className="text-ink-2">Sin entrenamiento</p>
+          ) : (
+            <>
+              <TipRow color="var(--gym)" label="Volumen" value={`${fmt(tip.volume)} kg`} />
+              <TipRow color="var(--ink-2)" label="Series" value={String(tip.sets)} />
+              {tip.minutes > 0 ? <TipRow color="var(--ink-2)" label="Tiempo" value={`${fmt(tip.minutes)} min`} /> : null}
+              <p className="mt-1 text-[11px] text-muted">{tip.names.join(" · ")}</p>
+            </>
+          )}
         </div>
       ) : null}
     </div>

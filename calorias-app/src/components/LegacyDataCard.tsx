@@ -18,6 +18,8 @@ export function LegacyDataCard() {
     count(summary.foods, "alimento", "alimentos"),
     count(summary.exercises, "ejercicio", "ejercicios"),
     count(summary.burned, "día de Apple Fitness", "días de Apple Fitness"),
+    count(summary.workouts, "entrenamiento de gym", "entrenamientos de gym"),
+    count(summary.routines, "rutina", "rutinas"),
     count(summary.weights, "registro de peso", "registros de peso"),
     summary.profile ? "tu perfil" : null,
   ].filter(Boolean);

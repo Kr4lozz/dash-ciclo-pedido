@@ -148,3 +148,44 @@ export function Meter({
     </div>
   );
 }
+
+/** Barras horizontales de categorías sin orden propio: una sola serie, un solo color. */
+export function BarList({
+  rows,
+  color,
+  unit,
+}: {
+  rows: { label: string; value: number }[];
+  color: string;
+  unit: string;
+}) {
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return (
+    <ul className="space-y-2.5">
+      {rows.map((r) => (
+        <li key={r.label}>
+          <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
+            <span className="font-medium">{r.label}</span>
+            <span className="tabular text-ink-2">
+              <span className="font-semibold text-ink">{fmt(r.value)}</span> {unit}
+            </span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full" style={{ background: track(color) }} aria-hidden>
+            <div className="h-full rounded-full" style={{ width: `${(r.value / max) * 100}%`, background: color }} />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Recuadro con una cifra (dentro de un <dl>). */
+export function Kpi({ label, value, unit }: { label: string; value: string; unit: string }) {
+  return (
+    <div className="rounded-3xl bg-card p-3 ring-1 ring-border">
+      <dt className="text-xs text-ink-2">{label}</dt>
+      <dd className="mt-1 text-xl font-semibold">{value}</dd>
+      <dd className="text-[11px] text-muted">{unit}</dd>
+    </div>
+  );
+}

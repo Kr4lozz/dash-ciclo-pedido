@@ -14,6 +14,17 @@ App personal (estilo Fitia) para registrar lo que comes con una foto y las calor
 - **Déficit del día:** gasto − comidas. El gasto sale de las calorías totales del reloj; si solo
   anotas las activas, se suman a tu metabolismo en reposo (Mifflin-St Jeor); sin datos del reloj se
   estima con tu perfil más el ejercicio registrado.
+- **Gym** (pestaña propia, sin IA): registra tu entrenamiento serie por serie con el peso y las
+  repeticiones, y ve la última vez de cada ejercicio mientras entrenas.
+  - Catálogo de ~80 ejercicios por grupo muscular (con peso, peso corporal o tiempo) y ejercicios propios.
+  - **Rutinas:** crea las tuyas (series y repeticiones por ejercicio), agrega rutinas sugeridas
+    (cuerpo completo, empuje, tirón, pierna, torso…), duplícalas, edítalas o guárdalas desde un
+    entrenamiento libre.
+  - Entrenamiento en curso con descanso entre series (cuenta regresiva); se guarda en el celular y
+    no se pierde si cierras la app. Al terminar avisa de los récords nuevos.
+  - Historial con edición de entrenamientos pasados; en Hoy aparecen los del día.
+  - En **Progreso → Entrenamiento:** entrenamientos, volumen (kg × repeticiones) por día, series por
+    grupo muscular, récords personales (con 1RM estimado) y evolución del peso de cada ejercicio.
 - **Ejercicio:**
   - actividades con cálculo por MET;
   - pasos;
@@ -105,6 +116,9 @@ KV_REST_API_URL=http://127.0.0.1:8079 KV_REST_API_TOKEN=dev APP_ACCESS_CODE=fami
 - `src/app/agregar/`: agregar comida (foto, texto, manual, recientes).
 - `src/app/ejercicio/`: agregar ejercicio (captura, actividad, pasos, manual).
 - `src/app/menu/`: opciones por comida y día completo (platos, ingredientes y cantidades).
+- `src/app/gym/`: inicio de Gym (entrenar, rutinas, historial), `entrenar/` (entrenamiento en curso
+  y edición) y `rutina/` (editor de rutinas). Catálogo en `src/lib/gym-data.ts`, cálculos en
+  `src/lib/gym.ts` y borrador del entrenamiento en `src/lib/gym-draft.ts`.
 - `src/app/progreso/`, `src/app/perfil/`: progreso y perfil.
 - `src/app/bienvenida/`, `src/app/entrar/`, `src/app/registro/`, `src/app/familia/`: inicio, acceso y administración de la familia.
 - `src/app/api/analyze/route.ts`: llamada a Gemini con salida JSON estructurada.

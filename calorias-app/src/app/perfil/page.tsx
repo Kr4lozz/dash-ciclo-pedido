@@ -411,7 +411,10 @@ function DataCard({ account }: { account: boolean }) {
       const where = account ? "de tu cuenta" : "de este dispositivo";
       if (!confirm(`Esto reemplazará todos los datos ${where} por los del respaldo. ¿Continuar?`)) return;
       const d = importData(raw);
-      toast(`Respaldo importado: ${d.foods.length} alimentos, ${d.exercises.length} ejercicios`);
+      const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+      toast(
+        `Respaldo importado: ${count(d.foods.length, "alimento", "alimentos")}, ${count(d.exercises.length, "ejercicio", "ejercicios")}, ${count(d.workouts.length, "entrenamiento de gym", "entrenamientos de gym")}`,
+      );
     } catch (e) {
       toast(e instanceof SyntaxError ? "El archivo no es un JSON válido." : (e as Error).message, "error");
     }

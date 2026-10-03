@@ -2,7 +2,18 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Camera, ChevronLeft, ChevronRight, Minus, Plus, Target, Utensils, Watch } from "lucide-react";
+import {
+  Camera,
+  ChevronLeft,
+  ChevronRight,
+  Dumbbell,
+  Minus,
+  Plus,
+  Target,
+  Utensils,
+  Watch,
+  type LucideIcon,
+} from "lucide-react";
 import { BalanceCard, BurnSheet } from "@/components/DayBalance";
 import { ExerciseEditSheet, FoodEditSheet } from "@/components/EditSheets";
 import { LegacyDataCard } from "@/components/LegacyDataCard";
@@ -10,10 +21,11 @@ import { CalorieRing, Meter } from "@/components/Meters";
 import { Card, cx } from "@/components/ui";
 import { addDays, dateLabel, longDate, todayStr } from "@/lib/dates";
 import { fmt, fmt1 } from "@/lib/format";
+import { exerciseNames, fmtMinutes, workoutTotals } from "@/lib/gym";
 import { computeTargets, dayActivity, sumFoods } from "@/lib/nutrition";
 import { useSession } from "@/lib/session";
 import { setSelectedDate, setWater, useAppData, useSelectedDate } from "@/lib/store";
-import { MEALS, type ExerciseEntry, type FoodEntry, type MealType } from "@/lib/types";
+import { MEALS, type ExerciseEntry, type FoodEntry, type MealType, type Workout } from "@/lib/types";
 
 export default function TodayPage() {
   const data = useAppData();
@@ -29,6 +41,7 @@ export default function TodayPage() {
     () => data.exercises.filter((e) => e.date === date),
     [data.exercises, date],
   );
+  const workouts = useMemo(() => data.workouts.filter((w) => w.date === date), [data.workouts, date]);
   const totals = sumFoods(foods);
   const burn = data.burned[date] ?? null;
   const burned = dayActivity(burn, exercises);
@@ -85,6 +98,7 @@ export default function TodayPage() {
           entries={exercises}
           burned={burned}
           appleActive={burn?.active ?? null}
+          workouts={workouts}
           onEdit={setEditingExercise}
           onEditApple={() => setEditingBurn(true)}
         />
@@ -238,7 +252,12 @@ function MealCard({
         href={`/agregar?comida=${meal}`}
         label={`Agregar a ${title.toLowerCase()}`}
         bordered={entries.length > 0}
-        ideas={{ href: `/menu?comida=${meal}`, label: `Qué comer en ${title.toLowerCase()}` }}
+        extra={{
+          href: `/menu?comida=${meal}`,
+          label: `Qué comer en ${title.toLowerCase()}`,
+          text: "¿Qué como?",
+          Icon: Utensils,
+        }}
       />
     </Card>
   );
@@ -248,6 +267,7 @@ function ExerciseCard({
   entries,
   burned,
   appleActive,
+  workouts,
   onEdit,
   onEditApple,
 }: {
@@ -255,6 +275,8 @@ function ExerciseCard({
   /** Total que cuenta para el día (Apple Fitness o suma de registros) */
   burned: number;
   appleActive: number | null;
+  /** Entrenamientos de gym del día (no suman calorías por sí solos) */
+  workouts: Workout[];
   onEdit: (e: ExerciseEntry) => void;
   onEditApple: () => void;
 }) {
@@ -311,10 +333,38 @@ function ExerciseCard({
           ))}
         </ul>
       ) : null}
+      {workouts.length > 0 ? (
+        <ul className={cx("divide-y divide-border", (appleActive !== null || entries.length > 0) && "border-t border-border")}>
+          {workouts.map((w) => {
+            const t = workoutTotals(w);
+            return (
+              <li key={w.id}>
+                <Link href={`/gym/entrenar?sesion=${w.id}`} className="flex items-center gap-3 py-2.5">
+                  <Dumbbell className="size-5 shrink-0 text-ink-2" aria-hidden />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{w.name}</span>
+                    <span className="block truncate text-xs text-muted">
+                      {[
+                        `${w.exercises.length} ${w.exercises.length === 1 ? "ejercicio" : "ejercicios"}`,
+                        t.sets > 0 ? `${t.sets} ${t.sets === 1 ? "serie" : "series"}` : null,
+                        t.volume > 0 ? `${fmt(t.volume)} kg` : null,
+                        w.minutes ? fmtMinutes(w.minutes) : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || exerciseNames(w)}
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
       <AddLink
         href="/ejercicio"
         label="Agregar ejercicio"
-        bordered={appleActive !== null || entries.length > 0}
+        bordered={appleActive !== null || entries.length > 0 || workouts.length > 0}
+        extra={{ href: "/gym", label: "Registrar un entrenamiento de gym", text: "Gym", Icon: Dumbbell }}
       />
     </Card>
   );
@@ -324,26 +374,26 @@ function AddLink({
   href,
   label,
   bordered,
-  ideas,
+  extra,
 }: {
   href: string;
   label: string;
   bordered: boolean;
-  /** Enlace a las opciones del menú para esa comida */
-  ideas?: { href: string; label: string };
+  /** Segundo enlace, a la derecha (las opciones de comida o el gym) */
+  extra?: { href: string; label: string; text: string; Icon: LucideIcon };
 }) {
   return (
     <div className={cx("mt-2 flex items-center justify-between gap-3 pt-2", bordered && "border-t border-border")}>
       <Link href={href} className="flex items-center gap-2 text-sm font-semibold text-accent-text">
         <Plus className="size-4" /> {label}
       </Link>
-      {ideas ? (
+      {extra ? (
         <Link
-          href={ideas.href}
-          aria-label={ideas.label}
+          href={extra.href}
+          aria-label={extra.label}
           className="flex shrink-0 items-center gap-1.5 text-sm font-medium text-ink-2 hover:text-ink"
         >
-          <Utensils className="size-4" /> ¿Qué como?
+          <extra.Icon className="size-4" /> {extra.text}
         </Link>
       ) : null}
     </div>
