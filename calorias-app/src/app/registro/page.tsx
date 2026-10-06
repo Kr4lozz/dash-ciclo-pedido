@@ -13,6 +13,7 @@ import {
 import { ApiError, accountApi } from "@/lib/api";
 import { signedIn } from "@/lib/session";
 import { toast } from "@/lib/toast";
+import { USAGE_NOTICE } from "@/lib/usage-shared";
 
 /** Sugerencia de usuario a partir del nombre: "María José" → "maria.jose". */
 function suggestUsername(name: string) {
@@ -116,6 +117,7 @@ export default function RegistroPage() {
               {error}
             </p>
           ) : null}
+          <p className="text-xs text-muted">{USAGE_NOTICE}</p>
           <Button
             type="submit"
             className="w-full"

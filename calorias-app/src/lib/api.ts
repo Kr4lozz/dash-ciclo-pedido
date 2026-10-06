@@ -3,6 +3,8 @@
 import type { SessionUser } from "./account";
 import type { ActivityReading, Analysis, AnalyzeRequest } from "./analysis";
 import { getAccessCode, notifyUnauthorized } from "./store";
+import { trackAction } from "./usage";
+import type { UsageReport } from "./usage-shared";
 
 export class ApiError extends Error {
   constructor(
@@ -46,6 +48,7 @@ async function post<T>(input: AnalyzeRequest, signal?: AbortSignal): Promise<T> 
   }
   if (!res.ok) throw await readError(res);
   const payload = (await res.json()) as { result: T };
+  trackAction("ai");
   return payload.result;
 }
 
@@ -101,6 +104,9 @@ export const accountApi = {
   changePassword: (body: { current: string; next: string }) =>
     post2<{ ok: true }>("/api/auth/password", body),
   family: () => call<{ members: FamilyMember[]; familyCode: string }>("/api/family"),
+  /** Uso de la app de cada miembro en los últimos `days` días hasta `to` (solo quien administra). */
+  usage: (days: number, to: string) =>
+    call<UsageReport>(`/api/family/usage?days=${days}&to=${encodeURIComponent(to)}`),
   resetPassword: (id: string) =>
     call<{ password: string }>(`/api/family/${encodeURIComponent(id)}`, { method: "POST" }),
   removeMember: (id: string) =>

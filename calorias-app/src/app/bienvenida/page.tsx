@@ -20,6 +20,7 @@ import {
 import { WELCOME_SEEN_KEY } from "@/components/ClientGate";
 import { Button, ButtonLink, Card } from "@/components/ui";
 import { startGuest, useSession } from "@/lib/session";
+import { USAGE_NOTICE } from "@/lib/usage-shared";
 
 const FEATURES: { Icon: typeof Camera; title: string; text: string }[] = [
   {
@@ -221,7 +222,7 @@ export default function BienvenidaPage() {
           <p className="text-sm text-ink-2">
             Cada persona tiene su cuenta y solo ve sus propios registros. Se guardan en la nube,
             así que puedes usar la app en varios dispositivos sin perder nada. Si la pruebas sin
-            cuenta, tus registros quedan solo en tu celular.
+            cuenta, tus registros quedan solo en tu celular. {USAGE_NOTICE}
           </p>
         ) : (
           <p className="text-sm text-ink-2">

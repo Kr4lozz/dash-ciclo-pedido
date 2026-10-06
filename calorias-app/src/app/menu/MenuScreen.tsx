@@ -34,6 +34,7 @@ import { loadMenu, saveMenu, type MenuState, type MenuView } from "@/lib/menu-st
 import { computeTargets, dayActivity } from "@/lib/nutrition";
 import { addFoods, setSelectedDate, useAppData, useSelectedDate } from "@/lib/store";
 import { toast } from "@/lib/toast";
+import { trackAction } from "@/lib/usage";
 import { MEALS, mealForHour, mealLabel, type FoodEntry, type MealType } from "@/lib/types";
 
 /** Comida pedida desde Hoy (?comida=cena), si viene una. */
@@ -78,6 +79,7 @@ export function MenuScreen() {
   };
 
   function generate(settings: MenuSettings) {
+    trackAction("menu");
     save({ ...state, settings, plan: buildPlan({ date, goal, settings, logged, seed: newSeed() }) });
     setEditing(false);
     window.scrollTo({ top: 0 });

@@ -117,6 +117,12 @@ const commands = {
     return n;
   },
   hlen: ([k]) => hash(k)?.size ?? 0,
+  hincrby: ([k, f, n]) => {
+    const h = hash(k, true);
+    const next = Number(h.get(str(f)) ?? 0) + Number(n);
+    h.set(str(f), str(next));
+    return next;
+  },
 };
 
 function run([name, ...args]) {

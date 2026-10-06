@@ -7,6 +7,7 @@ import {
 } from "@/server/auth";
 import { crossSite, json } from "@/server/http";
 import { db, keys } from "@/server/kv";
+import { deleteUsage } from "@/server/usage";
 import { deleteData } from "@/server/userdata";
 
 async function adminAndTarget(req: Request, ctx: RouteContext<"/api/family/[id]">) {
@@ -41,6 +42,7 @@ export async function DELETE(req: Request, ctx: RouteContext<"/api/family/[id]">
   const { admin, target } = res;
   if (target.id === admin.id) return json({ error: "No puedes eliminar tu propia cuenta." }, 400);
   await deleteData(target.id);
+  await deleteUsage(target.id);
   await db().hdel(keys.users, target.username);
   await db().del(keys.user(target.id));
   return json({ ok: true });

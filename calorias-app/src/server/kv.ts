@@ -51,4 +51,6 @@ export const keys = {
   gym: (id: string) => `ud:${id}:gym`, // rutinas y ejercicios propios
   rate: (scope: string, id: string) => `rl:${scope}:${id}`,
   ai: (id: string, day: string) => `ai:${id}:${day}`,
+  usage: (id: string, month: string) => `use:${id}:${month}`, // hash: "dd:contador" → veces
+  seen: "seen", // hash: usuario → última actividad (ms)
 };

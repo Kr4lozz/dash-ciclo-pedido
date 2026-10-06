@@ -12,6 +12,7 @@ import { isValidDateStr, todayStr } from "./dates";
 import { defaultMacroPct, defaultProfile } from "./nutrition";
 import type { DataPut, DayDoc, ServerData } from "./schemas";
 import { toast } from "./toast";
+import { trackAction } from "./usage";
 import {
   MEALS,
   MODE_IDS,
@@ -248,6 +249,7 @@ export function addFoods(items: NewFood[]) {
     .map((f, i) => normalizeFood({ ...f, id: uid(), createdAt: now + i }))
     .filter((e): e is FoodEntry => e !== null);
   update((d) => ({ ...d, foods: [...d.foods, ...entries] }), { days: entries.map((e) => e.date) });
+  if (entries.length > 0) trackAction("food");
 }
 
 export function updateFood(id: string, patch: Partial<NewFood>) {
@@ -273,6 +275,7 @@ export function addExercise(e: NewExercise) {
   const entry = normalizeExercise({ ...e, id: uid(), createdAt: Date.now() });
   if (!entry) return;
   update((d) => ({ ...d, exercises: [...d.exercises, entry] }), { days: [entry.date] });
+  trackAction("exercise");
 }
 
 export function updateExercise(id: string, patch: Partial<NewExercise>) {
@@ -295,9 +298,11 @@ export function deleteExercise(id: string) {
 // ---------- Agua ----------
 
 export function setWater(date: string, ml: number) {
+  const before = data.water[date] ?? 0;
   update((d) => ({ ...d, water: { ...d.water, [date]: Math.max(0, Math.round(ml)) } }), {
     days: [date],
   });
+  if (ml > before) trackAction("water"); // corregir hacia abajo no es un registro nuevo
 }
 
 // ---------- Calorías quemadas según el reloj ----------
@@ -314,6 +319,7 @@ export function setBurned(date: string, burn: DayBurn) {
     },
     { days: [date] },
   );
+  if (clean) trackAction("burned");
 }
 
 // ---------- Gym ----------
@@ -338,6 +344,7 @@ export function saveWorkout(w: NewWorkout): Workout | null {
     }),
     { days: [entry.date, before?.date ?? entry.date] },
   );
+  if (!before) trackAction("workout");
   return entry;
 }
 
@@ -367,6 +374,7 @@ export function saveRoutine(r: NewRoutine): Routine | null {
     }),
     { gym: true },
   );
+  if (!before) trackAction("routine");
   return entry;
 }
 
@@ -420,6 +428,7 @@ export function logWeight(date: string, kg: number) {
     },
     { weights: true, profile: true },
   );
+  trackAction("weight");
 }
 
 export function deleteWeight(date: string) {
