@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { BottomNav } from "@/components/BottomNav";
 import { ClientGate } from "@/components/ClientGate";
 import { Toaster } from "@/components/Toaster";
+import { UsageTracker } from "@/components/UsageTracker";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </div>
         <BottomNav />
         <Toaster />
+        <UsageTracker />
       </body>
     </html>
   );

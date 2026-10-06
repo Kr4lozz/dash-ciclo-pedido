@@ -64,6 +64,13 @@ registros se guardan en la nube: no se pierden al cambiar de celular y cada uno 
   cuota gratuita de Gemini de toda la familia.
 - Si antes usaste la app sin cuenta, al entrar aparece la opción de pasar esos registros a tu
   cuenta.
+- **Uso de la app:** en **Perfil → Familia → Uso de la app** quien administra ve, por persona,
+  su último uso, los días activos, las aperturas, los toques (aproximados), los registros hechos
+  y los análisis con IA de los últimos 7 o 30 días, con las pantallas más vistas. Solo son
+  contadores por día (`use:{id}:{año-mes}` en la base): **nunca** se guarda lo que alguien anota
+  ni sus fotos, ni a qué botón toca. Todos los miembros lo ven avisado en Perfil, en el registro
+  y en la bienvenida. Quien prueba sin cuenta no se cuenta. Se cuenta desde que se activó la
+  función y es aproximado: si el celular se apaga o no hay conexión, algo puede perderse.
 
 Sin base de datos la app funciona en **modo local**: todo se guarda solo en el dispositivo
 (localStorage) y desde Perfil puedes exportar o importar un respaldo.
@@ -123,6 +130,7 @@ KV_REST_API_URL=http://127.0.0.1:8079 KV_REST_API_TOKEN=dev APP_ACCESS_CODE=fami
 - `src/app/bienvenida/`, `src/app/entrar/`, `src/app/registro/`, `src/app/familia/`: inicio, acceso y administración de la familia.
 - `src/app/api/analyze/route.ts`: llamada a Gemini con salida JSON estructurada.
 - `src/app/api/{session,auth,data,family}/`: cuentas y datos en la base (`src/server/`).
+- `src/lib/usage.ts`, `src/components/UsageTracker.tsx`, `src/app/api/usage/`, `src/app/api/family/usage/`, `src/components/FamilyUsage.tsx`: contadores de uso y su panel para quien administra (`src/lib/usage-shared.ts` define qué se cuenta).
 - `src/lib/store.ts`, `src/lib/session.ts`: datos en el navegador y sincronización con la cuenta.
 - `src/lib/ocr.ts`, `src/lib/activity-text.ts`: OCR de capturas de actividad (Tesseract.js, en el navegador). `npm run build` copia el motor a `public/ocr` con `scripts/copy-ocr-assets.mjs`.
 - `src/lib/`: almacenamiento local, cálculos nutricionales, tabla MET y utilidades.

@@ -59,6 +59,7 @@ import {
 } from "@/lib/store";
 import { signOut, useSession } from "@/lib/session";
 import { toast } from "@/lib/toast";
+import { USAGE_NOTICE } from "@/lib/usage-shared";
 import type { ActivityLevel, Goal, Profile, Sex } from "@/lib/types";
 
 type Draft = {
@@ -509,6 +510,7 @@ function AccountCard({ user }: { user: SessionUser }) {
       <p className={cx("flex items-center gap-2 text-sm", sync.tone)}>
         <sync.Icon className="size-4 shrink-0" /> {sync.text}
       </p>
+      <p className="text-xs text-muted">{USAGE_NOTICE}</p>
       {user.role === "admin" ? (
         <Link
           href="/familia"

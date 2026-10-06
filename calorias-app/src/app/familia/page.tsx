@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Copy, KeyRound, LoaderCircle, Share2, Trash2, Users } from "lucide-react";
+import { FamilyUsage } from "@/components/FamilyUsage";
 import { Sheet } from "@/components/Sheet";
 import { Button, Card, PageHeader } from "@/components/ui";
 import { accountApi, type FamilyMember } from "@/lib/api";
@@ -175,6 +176,8 @@ function FamilyAdmin({ selfId }: { selfId: string }) {
           cuenta.
         </p>
       </Card>
+
+      <FamilyUsage selfId={selfId} refreshKey={version} />
 
       <Sheet open={temp !== null} onClose={() => setTemp(null)} title="Contraseña nueva">
         {temp ? (

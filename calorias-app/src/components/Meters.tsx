@@ -157,7 +157,8 @@ export function BarList({
 }: {
   rows: { label: string; value: number }[];
   color: string;
-  unit: string;
+  /** Texto fijo o función del valor (para el singular: «1 vez», «2 veces»). */
+  unit: string | ((value: number) => string);
 }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
@@ -167,7 +168,7 @@ export function BarList({
           <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
             <span className="font-medium">{r.label}</span>
             <span className="tabular text-ink-2">
-              <span className="font-semibold text-ink">{fmt(r.value)}</span> {unit}
+              <span className="font-semibold text-ink">{fmt(r.value)}</span> {typeof unit === "string" ? unit : unit(r.value)}
             </span>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full" style={{ background: track(color) }} aria-hidden>
