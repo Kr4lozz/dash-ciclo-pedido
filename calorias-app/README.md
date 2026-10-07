@@ -95,8 +95,28 @@ Sin base de datos la app funciona en **modo local**: todo se guarda solo en el d
 
 Opcional: `GEMINI_MODEL` para cambiar el modelo principal (por defecto `gemini-flash-latest`;
 si está saturado se usa `gemini-flash-lite-latest`), `AI_DAILY_LIMIT` para el máximo diario
-de análisis por persona y `GUEST_AI_DAILY_LIMIT` para quien prueba sin cuenta. Si Gemini falla,
+de análisis por persona y `GUEST_AI_DAILY_LIMIT` para quien prueba sin cuenta. Si la IA falla,
 el intento no se descuenta.
+
+### Si Gemini falla
+
+- La app prueba un modelo de Gemini tras otro (cada uno tiene su propia cuota y capacidad) y, si
+  un modelo rechaza el esquema JSON, lo repite sin esquema. Si todo falla, el mensaje incluye los
+  códigos (p. ej. «Gemini 500, Respaldo 429») y en Vercel → Logs queda el detalle de cada intento.
+- **IA de respaldo (opcional):** agrega en Vercel una llave y la app la usa sola cuando Gemini no
+  responde, avisando que fue otra IA: `GROQ_API_KEY` (gratis en
+  [console.groq.com/keys](https://console.groq.com/keys), recomendada), `MISTRAL_API_KEY`
+  ([console.mistral.ai/api-keys](https://console.mistral.ai/api-keys)) u `OPENAI_API_KEY` (de pago).
+  Cada una admite su `GROQ_MODEL`, `MISTRAL_MODEL` u `OPENAI_MODEL`. Para otra IA con API
+  compatible con OpenAI y que acepte imágenes: `FALLBACK_AI_BASE_URL`, `FALLBACK_AI_API_KEY`,
+  `FALLBACK_AI_MODEL` y, opcional, `FALLBACK_AI_NAME`. Los modelos de respaldo pueden ser menos
+  precisos que Gemini.
+- **Perfil → Familia → Estado de la IA** (solo quien administra): «Probar ahora» comprueba cada
+  modelo, la consulta real de texto y de foto y la base de datos, y dice si el problema es de
+  Gemini, de la llave o de la app. Gasta unas pocas solicitudes de la cuota (máximo 8 pruebas
+  cada 10 minutos).
+- Para probar sin gastar cuota: `node scripts/mock-ai.mjs` simula Gemini y una IA de respaldo con
+  fallos que se activan en caliente (ver el encabezado del archivo).
 
 La capa gratuita de Gemini tiene límites por minuto y por día. Google puede usar lo que envías
 en la capa gratuita para mejorar sus productos: no subas fotos que no quieras compartir.
@@ -128,7 +148,7 @@ KV_REST_API_URL=http://127.0.0.1:8079 KV_REST_API_TOKEN=dev APP_ACCESS_CODE=fami
   `src/lib/gym.ts` y borrador del entrenamiento en `src/lib/gym-draft.ts`.
 - `src/app/progreso/`, `src/app/perfil/`: progreso y perfil.
 - `src/app/bienvenida/`, `src/app/entrar/`, `src/app/registro/`, `src/app/familia/`: inicio, acceso y administración de la familia.
-- `src/app/api/analyze/route.ts`: llamada a Gemini con salida JSON estructurada.
+- `src/app/api/analyze/route.ts`: acceso, límites y respuesta del análisis; `src/server/ai.ts`: cadena de modelos de Gemini, IA de respaldo y diagnóstico (`src/app/api/family/ai/`, `src/components/AiStatus.tsx`).
 - `src/app/api/{session,auth,data,family}/`: cuentas y datos en la base (`src/server/`).
 - `src/lib/usage.ts`, `src/components/UsageTracker.tsx`, `src/app/api/usage/`, `src/app/api/family/usage/`, `src/components/FamilyUsage.tsx`: contadores de uso y su panel para quien administra (`src/lib/usage-shared.ts` define qué se cuenta).
 - `src/lib/store.ts`, `src/lib/session.ts`: datos en el navegador y sincronización con la cuenta.

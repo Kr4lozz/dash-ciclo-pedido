@@ -1,8 +1,10 @@
 "use client";
 
 import type { SessionUser } from "./account";
+import type { AiStatus } from "./ai-shared";
 import type { ActivityReading, Analysis, AnalyzeRequest } from "./analysis";
 import { getAccessCode, notifyUnauthorized } from "./store";
+import { toast } from "./toast";
 import { trackAction } from "./usage";
 import type { UsageReport } from "./usage-shared";
 
@@ -47,8 +49,12 @@ async function post<T>(input: AnalyzeRequest, signal?: AbortSignal): Promise<T> 
     throw new ApiError("Sin conexión. Revisa tu internet e intenta de nuevo.", 0);
   }
   if (!res.ok) throw await readError(res);
-  const payload = (await res.json()) as { result: T };
+  const payload = (await res.json()) as { result: T; provider?: string; via?: string };
   trackAction("ai");
+  // Si Gemini no respondió y contestó la IA de respaldo, se avisa: puede ser menos precisa.
+  if (payload.provider && payload.provider !== "gemini") {
+    toast(`Gemini no respondió: usé ${payload.via ?? "otra IA"}. Revisa bien las cantidades.`);
+  }
   return payload.result;
 }
 
@@ -104,6 +110,8 @@ export const accountApi = {
   changePassword: (body: { current: string; next: string }) =>
     post2<{ ok: true }>("/api/auth/password", body),
   family: () => call<{ members: FamilyMember[]; familyCode: string }>("/api/family"),
+  /** Prueba la IA (solo quien administra): modelos, cadena real y base de datos. */
+  aiStatus: () => call<AiStatus>("/api/family/ai", { method: "POST" }),
   /** Uso de la app de cada miembro en los últimos `days` días hasta `to` (solo quien administra). */
   usage: (days: number, to: string) =>
     call<UsageReport>(`/api/family/usage?days=${days}&to=${encodeURIComponent(to)}`),
