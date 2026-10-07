@@ -517,7 +517,7 @@ function AccountCard({ user }: { user: SessionUser }) {
           className="flex items-center gap-3 rounded-2xl bg-field p-3 ring-1 ring-border"
         >
           <Users className="size-5 text-accent-text" />
-          <span className="flex-1 text-sm font-semibold">Familia: invitar y administrar cuentas</span>
+          <span className="flex-1 text-sm font-semibold">Familia: cuentas, uso de la app y estado de la IA</span>
           <ChevronRight className="size-5 text-muted" />
         </Link>
       ) : null}

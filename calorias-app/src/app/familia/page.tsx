@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Copy, KeyRound, LoaderCircle, Share2, Trash2, Users } from "lucide-react";
+import { AiStatus } from "@/components/AiStatus";
 import { FamilyUsage } from "@/components/FamilyUsage";
 import { Sheet } from "@/components/Sheet";
 import { Button, Card, PageHeader } from "@/components/ui";
@@ -176,6 +177,8 @@ function FamilyAdmin({ selfId }: { selfId: string }) {
           cuenta.
         </p>
       </Card>
+
+      <AiStatus />
 
       <FamilyUsage selfId={selfId} refreshKey={version} />
 

@@ -433,6 +433,8 @@ function AnalysisError({ error, status }: { error: string | null; status: number
   // En modo local el código de acceso se escribe en Perfil.
   const needsCode = session.status === "local" && (status === 401 || status === 503);
   const trialOver = session.status === "guest" && status === 429;
+  // La IA cayó (no es un problema de la foto): hay otras formas de anotar.
+  const aiDown = !needsCode && !trialOver && (status === 502 || status === 503 || status === 504);
   return (
     <div role="alert" className="flex gap-2 rounded-2xl bg-danger-soft p-3 text-sm text-danger-text">
       <TriangleAlert className="mt-0.5 size-4 shrink-0" />
@@ -454,6 +456,7 @@ function AnalysisError({ error, status }: { error: string | null; status: number
             </Link>
           </>
         ) : null}
+        {aiDown ? <span className="mt-1 block">Mientras tanto puedes anotar con Manual o Recientes.</span> : null}
       </p>
     </div>
   );
