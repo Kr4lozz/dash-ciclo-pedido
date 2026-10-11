@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartColumn, Dumbbell, House, UserRound, Utensils } from "lucide-react";
+import { CalendarCheck, ChartColumn, Dumbbell, House, UserRound } from "lucide-react";
 import { cx } from "./ui";
 
 // "/gym/" (con la barra) oculta solo las pantallas de entrenar y de rutinas, no el inicio de Gym.
@@ -10,7 +10,7 @@ const HIDDEN = ["/agregar", "/ejercicio", "/bienvenida", "/entrar", "/registro",
 
 const TABS = [
   { href: "/", label: "Hoy", Icon: House },
-  { href: "/menu", label: "Menú", Icon: Utensils },
+  { href: "/agenda", label: "Agenda", Icon: CalendarCheck },
   { href: "/gym", label: "Gym", Icon: Dumbbell },
   { href: "/progreso", label: "Progreso", Icon: ChartColumn },
   { href: "/perfil", label: "Perfil", Icon: UserRound },

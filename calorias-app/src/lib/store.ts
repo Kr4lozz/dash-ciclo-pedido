@@ -30,6 +30,7 @@ import {
   type Profile,
   type Routine,
   type RoutineExercise,
+  type Task,
   type WeightEntry,
   type Workout,
   type WorkoutExercise,
@@ -52,6 +53,7 @@ const EMPTY: AppData = {
   workouts: [],
   routines: [],
   customExercises: [],
+  tasks: [],
 };
 
 export type StoreMode = { kind: "none" } | { kind: "local" } | { kind: "user"; uid: string };
@@ -217,6 +219,8 @@ interface Dirty {
   weights?: boolean;
   /** rutinas y ejercicios propios */
   gym?: boolean;
+  /** actividades de la agenda */
+  plan?: boolean;
   /** reemplazar todo (importar respaldo o borrar todo) */
   replace?: boolean;
 }
@@ -402,6 +406,41 @@ export function deleteCustomExercise(id: string) {
   });
 }
 
+// ---------- Agenda ----------
+
+export type NewTask = Pick<Task, "title"> & Partial<Pick<Task, "note" | "date" | "time">>;
+
+/** Crea una actividad (con fecha y hora opcionales). */
+export function addTask(t: NewTask): Task | null {
+  const entry = normalizeTask({ ...t, id: uid(), done: false, createdAt: Date.now() });
+  if (!entry) return null;
+  update((d) => ({ ...d, tasks: [...d.tasks, entry] }), { plan: true });
+  trackAction("task");
+  return entry;
+}
+
+export function updateTask(id: string, patch: Partial<Pick<Task, "title" | "note" | "date" | "time">>) {
+  const before = data.tasks.find((t) => t.id === id);
+  if (!before) return;
+  const after = normalizeTask({ ...before, ...patch }) ?? before;
+  update((d) => ({ ...d, tasks: d.tasks.map((t) => (t.id === id ? after : t)) }), { plan: true });
+}
+
+/** Marca o desmarca una actividad como hecha. */
+export function toggleTask(id: string) {
+  const before = data.tasks.find((t) => t.id === id);
+  if (!before) return;
+  const done = !before.done;
+  const after: Task = { ...before, done, doneAt: done ? Date.now() : null };
+  update((d) => ({ ...d, tasks: d.tasks.map((t) => (t.id === id ? after : t)) }), { plan: true });
+  if (done) trackAction("taskDone");
+}
+
+export function deleteTask(id: string) {
+  if (!data.tasks.some((t) => t.id === id)) return;
+  update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }), { plan: true });
+}
+
 // ---------- Perfil y peso ----------
 
 export function saveProfile(p: Profile) {
@@ -470,6 +509,7 @@ export interface LegacySummary {
   burned: number;
   workouts: number;
   routines: number;
+  tasks: number;
   weights: number;
   profile: boolean;
 }
@@ -486,6 +526,7 @@ export function legacySummary(): LegacySummary | null {
     burned: Object.keys(d.burned).length,
     workouts: d.workouts.length,
     routines: d.routines.length,
+    tasks: d.tasks.length,
     weights: d.weights.length,
     profile: d.profile !== null,
   };
@@ -495,6 +536,7 @@ export function legacySummary(): LegacySummary | null {
     summary.burned ||
     summary.workouts ||
     summary.routines ||
+    summary.tasks ||
     summary.weights ||
     summary.profile;
   return any ? summary : null;
@@ -516,6 +558,8 @@ export function migrateLegacyData() {
   const customIds = new Set(data.customExercises.map((x) => x.id));
   const workouts = legacy.workouts.filter((w) => !workoutIds.has(w.id));
   const routines = legacy.routines.filter((r) => !routineIds.has(r.id));
+  const taskIds = new Set(data.tasks.map((t) => t.id));
+  const tasks = legacy.tasks.filter((t) => !taskIds.has(t.id));
   const customExercises = legacy.customExercises.filter((x) => !customIds.has(x.id));
   const weightDates = new Set(data.weights.map((w) => w.date));
   const days = new Set([
@@ -541,12 +585,14 @@ export function migrateLegacyData() {
       workouts: [...d.workouts, ...workouts],
       routines: [...d.routines, ...routines],
       customExercises: [...d.customExercises, ...customExercises],
+      tasks: [...d.tasks, ...tasks],
     }),
     {
       days: [...days],
       weights: true,
       profile: takeProfile,
       gym: routines.length > 0 || customExercises.length > 0,
+      plan: tasks.length > 0,
     },
   );
   archiveLegacy();
@@ -568,7 +614,7 @@ function archiveLegacy() {
 
 // ---------- Sincronización con la cuenta ----------
 
-let pending = new Map<string, number>(); // "day:2026-09-27" | "profile" | "weights" | "gym" | "replace" → secuencia
+let pending = new Map<string, number>(); // "day:2026-09-27" | "profile" | "weights" | "gym" | "plan" | "replace" → secuencia
 let seq = 0;
 let flushing = false;
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
@@ -594,6 +640,7 @@ function markDirty(d: Dirty) {
   if (d.profile) mark("profile");
   if (d.weights) mark("weights");
   if (d.gym) mark("gym");
+  if (d.plan) mark("plan");
   for (const date of new Set(d.days ?? [])) mark(`day:${date}`);
   persistPending();
   syncState = "pending";
@@ -642,6 +689,7 @@ function buildPayloads(): DataPut[] {
   if (replace || pending.has("gym")) {
     first.gym = { routines: data.routines, custom: data.customExercises };
   }
+  if (replace || pending.has("plan")) first.plan = { tasks: data.tasks };
   const payloads: DataPut[] = [first];
   for (let i = 0; i < dates.length; i += 150) {
     const chunk = Object.fromEntries(dates.slice(i, i + 150).map((d) => [d, days.get(d) ?? null]));
@@ -762,6 +810,7 @@ function mergeRemote(server: ServerData): AppData {
     workouts: Object.values(days).flatMap((d) => d.workouts ?? []),
     routines: server.gym?.routines ?? [],
     customExercises: server.gym?.custom ?? [],
+    tasks: server.plan?.tasks ?? [],
   });
   // Lo que todavía no se envió manda sobre lo que hay en el servidor.
   const localDays = new Set(
@@ -788,6 +837,7 @@ function mergeRemote(server: ServerData): AppData {
     workouts: keepLocal(remote.workouts, data.workouts),
     routines: pending.has("gym") ? data.routines : remote.routines,
     customExercises: pending.has("gym") ? data.customExercises : remote.customExercises,
+    tasks: pending.has("plan") ? data.tasks : remote.tasks,
   };
 }
 
@@ -1052,6 +1102,27 @@ function normalizeRoutine(v: unknown): Routine | null {
   };
 }
 
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function normalizeTask(v: unknown): Task | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const title = str(o.title).trim().slice(0, 100);
+  if (!title) return null;
+  const done = o.done === true;
+  const doneAt = num(o.doneAt);
+  return {
+    id: str(o.id).slice(0, 64) || uid(),
+    title,
+    note: str(o.note).trim().slice(0, 300),
+    date: isValidDateStr(o.date) ? o.date : null,
+    time: typeof o.time === "string" && TIME_RE.test(o.time) ? o.time : null,
+    done,
+    doneAt: done ? (doneAt > 0 ? doneAt : Date.now()) : null,
+    createdAt: num(o.createdAt, Date.now()),
+  };
+}
+
 function normalizeCustomExercise(v: unknown): GymExercise | null {
   if (!v || typeof v !== "object") return null;
   const o = v as Record<string, unknown>;
@@ -1115,5 +1186,13 @@ function normalizeData(raw: unknown): AppData {
         .map(normalizeCustomExercise)
         .filter((x): x is GymExercise => x !== null),
     ).slice(0, 200),
+    tasks: uniqueById(
+      list(o.tasks)
+        .map(normalizeTask)
+        .filter((t): t is Task => t !== null),
+    )
+      // Las hechas hace más de 4 meses se van borrando solas para que la lista no crezca sin fin.
+      .filter((t) => !t.done || Date.now() - (t.doneAt ?? t.createdAt) < 120 * 24 * 60 * 60 * 1000)
+      .slice(0, 1000),
   };
 }

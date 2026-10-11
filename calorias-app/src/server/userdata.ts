@@ -7,13 +7,14 @@ import { db, keys } from "./kv";
 
 export async function readData(uid: string): Promise<ServerData> {
   const r = db();
-  const [profile, weights, days, gym] = await Promise.all([
+  const [profile, weights, days, gym, plan] = await Promise.all([
     r.get<ServerData["profile"]>(keys.profile(uid)),
     r.get<ServerData["weights"]>(keys.weights(uid)),
     r.hgetall<Record<string, DayDoc>>(keys.days(uid)),
     r.get<ServerData["gym"]>(keys.gym(uid)),
+    r.get<ServerData["plan"]>(keys.plan(uid)),
   ]);
-  return { profile: profile ?? null, weights: weights ?? [], days: days ?? {}, gym: gym ?? null };
+  return { profile: profile ?? null, weights: weights ?? [], days: days ?? {}, gym: gym ?? null, plan: plan ?? null };
 }
 
 const isEmpty = (d: DayDoc) =>
@@ -33,6 +34,7 @@ export async function writeData(uid: string, put: DataPut) {
 
   if (put.weights) await r.set(keys.weights(uid), put.weights);
   if (put.gym) await r.set(keys.gym(uid), put.gym);
+  if (put.plan) await r.set(keys.plan(uid), put.plan);
 
   if (put.days) {
     const toSet: [string, DayDoc][] = [];
@@ -50,5 +52,5 @@ export async function writeData(uid: string, put: DataPut) {
 }
 
 export async function deleteData(uid: string) {
-  await db().del(keys.profile(uid), keys.weights(uid), keys.days(uid), keys.gym(uid));
+  await db().del(keys.profile(uid), keys.weights(uid), keys.days(uid), keys.gym(uid), keys.plan(uid));
 }

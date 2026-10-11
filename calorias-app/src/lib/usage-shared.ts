@@ -13,7 +13,7 @@ export const PAGES = {
   hoy: "Hoy",
   agregar: "Registrar comida",
   ejercicio: "Registrar ejercicio",
-  menu: "Menú",
+  agenda: "Agenda",
   gym: "Gym",
   "gym-entrenar": "Entrenar",
   "gym-rutina": "Rutinas",
@@ -33,7 +33,8 @@ export const ACTIONS = {
   weight: "Peso",
   workout: "Entrenamientos",
   routine: "Rutinas nuevas",
-  menu: "Menús generados",
+  task: "Actividades creadas",
+  taskDone: "Actividades hechas",
   ai: "Análisis con IA",
 } as const;
 export type ActionId = keyof typeof ACTIONS;
@@ -52,7 +53,7 @@ export const RECORD_ACTIONS: readonly ActionId[] = [
 const TOP_LEVEL: Record<string, PageId> = {
   agregar: "agregar",
   ejercicio: "ejercicio",
-  menu: "menu",
+  agenda: "agenda",
   gym: "gym",
   progreso: "progreso",
   perfil: "perfil",

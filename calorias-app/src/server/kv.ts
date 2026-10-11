@@ -49,6 +49,7 @@ export const keys = {
   weights: (id: string) => `ud:${id}:weights`,
   days: (id: string) => `ud:${id}:days`, // hash: fecha → día
   gym: (id: string) => `ud:${id}:gym`, // rutinas y ejercicios propios
+  plan: (id: string) => `ud:${id}:plan`, // actividades de la agenda
   rate: (scope: string, id: string) => `rl:${scope}:${id}`,
   ai: (id: string, day: string) => `ai:${id}:${day}`,
   usage: (id: string, month: string) => `use:${id}:${month}`, // hash: "dd:contador" → veces
