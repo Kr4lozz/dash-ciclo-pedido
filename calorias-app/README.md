@@ -17,7 +17,7 @@ App personal (estilo Fitia) para registrar lo que comes con una foto y las calor
 - **Gym** (pestaña propia, sin IA): registra tu entrenamiento serie por serie con el peso y las
   repeticiones, y ve la última vez de cada ejercicio mientras entrenas.
   - Catálogo de ~80 ejercicios por grupo muscular (con peso, peso corporal o tiempo) y ejercicios propios.
-  - **Rutinas:** crea las tuyas (series y repeticiones por ejercicio), agrega rutinas sugeridas
+  - **Rutinas:** crea las tuyas (series y repeticiones por ejercicio, o cada serie con sus repeticiones y su peso para ir de menos a más; al entrenar el peso aparece escrito y lo puedes cambiar), agrega rutinas sugeridas
     (cuerpo completo, empuje, tirón, pierna, torso…), duplícalas, edítalas o guárdalas desde un
     entrenamiento libre.
   - Entrenamiento en curso con descanso entre series (cuenta regresiva); se guarda en el celular y

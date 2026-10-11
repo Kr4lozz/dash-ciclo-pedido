@@ -14,6 +14,7 @@ import {
   type GymExercise,
   type GymSet,
   type MuscleGroup,
+  type PlannedSet,
   type Routine,
   type RoutineExercise,
   type Workout,
@@ -54,7 +55,7 @@ const text = (n: number) => (n > 0 ? String(Math.round(n * 100) / 100).replace("
 export interface ExerciseSeed extends Pick<GymExercise, "name" | "muscle" | "mode"> {
   id: string;
   /** objetivo de una rutina */
-  target?: { sets: number; reps: number; sec: number };
+  target?: { sets: number; reps: number; sec: number; plan?: PlannedSet[] };
 }
 
 /** Un ejercicio con sus series ya llenas con lo de la última vez (o con el objetivo de la rutina). */
@@ -64,10 +65,15 @@ export function newDraftExercise(
   before?: Pick<Workout, "date" | "createdAt" | "id">,
 ): DraftExercise {
   const last = lastSets(workouts, seed.id, before);
-  const count = Math.min(10, Math.max(1, seed.target?.sets ?? last?.length ?? 3));
+  const plan = seed.mode === "tiempo" ? undefined : seed.target?.plan;
+  const count = plan?.length ? Math.min(20, plan.length) : Math.min(10, Math.max(1, seed.target?.sets ?? last?.length ?? 3));
   const unit = timeUnit(seed.muscle);
   const sets = Array.from({ length: count }, (_, i): DraftSet => {
     const prev = last?.[i] ?? last?.[last.length - 1];
+    if (plan?.[i]) {
+      // El peso de la rutina manda; si no lo definió, el de la última vez. Se puede cambiar al entrenar.
+      return { kg: text(plan[i].kg > 0 ? plan[i].kg : (prev?.kg ?? 0)), reps: text(plan[i].reps || prev?.reps || 0), done: false };
+    }
     if (seed.mode === "tiempo") {
       const sec = prev?.sec || seed.target?.sec || 0;
       return { kg: "", reps: text(unit === "min" ? sec / 60 : sec), done: false };
@@ -107,7 +113,7 @@ export function draftFromRoutine(routine: Routine, workouts: Workout[], date: st
           name: ex.name,
           muscle: ex.muscle,
           mode: ex.mode,
-          target: { sets: ex.sets, reps: ex.reps, sec: ex.sec },
+          target: { sets: ex.sets, reps: ex.reps, sec: ex.sec, plan: ex.plan },
         },
         workouts,
       ),
@@ -188,17 +194,25 @@ export function doneSets(d: Pick<Draft, "exercises">): number {
   return d.exercises.reduce((n, ex) => n + ex.sets.filter((s) => s.done && readSet(s, ex) !== null).length, 0);
 }
 
-/** Una rutina a partir de lo que se hizo: mismas series y las repeticiones de la primera. */
+/**
+ * Una rutina a partir de lo que se hizo: mismas series y las repeticiones de la primera; si las
+ * repeticiones cambiaron de una serie a otra, se guardan una por una con su peso.
+ */
 export function routineExercisesFrom(exercises: WorkoutExercise[]): RoutineExercise[] {
-  return exercises.map((ex) => ({
-    exerciseId: ex.exerciseId,
-    name: ex.name,
-    muscle: ex.muscle,
-    mode: ex.mode,
-    sets: Math.min(20, ex.sets.length),
-    reps: ex.sets[0]?.reps ?? 0,
-    sec: ex.sets[0]?.sec ?? 0,
-  }));
+  return exercises.map((ex) => {
+    const varied = ex.mode !== "tiempo" && ex.sets.some((s) => s.reps !== ex.sets[0].reps);
+    const plan = varied ? ex.sets.slice(0, 20).map((s) => ({ reps: s.reps, kg: s.kg })) : undefined;
+    return {
+      exerciseId: ex.exerciseId,
+      name: ex.name,
+      muscle: ex.muscle,
+      mode: ex.mode,
+      sets: plan ? plan.length : Math.min(20, ex.sets.length),
+      reps: ex.sets[0]?.reps ?? 0,
+      sec: ex.sets[0]?.sec ?? 0,
+      ...(plan ? { plan } : {}),
+    };
+  });
 }
 
 // ---------- Persistencia en este dispositivo ----------

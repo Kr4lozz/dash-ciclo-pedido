@@ -1014,13 +1014,26 @@ function normalizeRoutineExercise(v: unknown): RoutineExercise | null {
   const name = str(o.name).trim().slice(0, 80);
   const exerciseId = str(o.exerciseId).slice(0, 64);
   if (!name || !exerciseId) return null;
+  const kind = exerciseKind(o);
+  // Series con repeticiones y peso propios (no aplica a los ejercicios de tiempo).
+  const plan =
+    kind.mode === "tiempo" || !Array.isArray(o.plan)
+      ? []
+      : o.plan.slice(0, 20).map((p) => {
+          const x = (p ?? {}) as Record<string, unknown>;
+          return {
+            reps: Math.round(clampNum(num(x.reps), 0, 100)),
+            kg: Math.round(clampNum(num(x.kg), 0, 1000) * 100) / 100,
+          };
+        });
   return {
     exerciseId,
     name,
-    ...exerciseKind(o),
-    sets: Math.round(clampNum(num(o.sets, 3), 1, 20)),
-    reps: Math.round(clampNum(num(o.reps), 0, 100)),
+    ...kind,
+    sets: plan.length > 0 ? plan.length : Math.round(clampNum(num(o.sets, 3), 1, 20)),
+    reps: plan.length > 0 ? plan[0].reps : Math.round(clampNum(num(o.reps), 0, 100)),
     sec: Math.round(clampNum(num(o.sec), 0, 3600)),
+    ...(plan.length > 0 ? { plan } : {}),
   };
 }
 

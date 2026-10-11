@@ -165,6 +165,12 @@ export interface Workout {
   createdAt: number;
 }
 
+/** Una serie planeada de una rutina: repeticiones y, si ya se sabe, el peso (0 = sin definir). */
+export interface PlannedSet {
+  reps: number;
+  kg: number;
+}
+
 export interface RoutineExercise {
   exerciseId: string;
   name: string;
@@ -174,6 +180,11 @@ export interface RoutineExercise {
   reps: number;
   /** objetivo en segundos (ejercicios de tiempo) */
   sec: number;
+  /**
+   * Series con repeticiones y peso propios (p. ej. 12, 10, 8 subiendo el peso). Sin esto todas
+   * las series son iguales: `sets` × `reps`. Con esto, `sets` es su cantidad y `reps` las de la primera.
+   */
+  plan?: PlannedSet[];
 }
 
 export interface Routine {

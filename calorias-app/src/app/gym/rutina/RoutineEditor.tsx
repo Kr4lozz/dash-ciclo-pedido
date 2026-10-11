@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { ArrowDown, ArrowUp, Minus, Plus, Trash2, X } from "lucide-react";
 import { ExercisePicker } from "@/components/ExercisePicker";
-import { Button, Card, PageHeader, TextInput, buttonClass } from "@/components/ui";
+import { Button, Card, PageHeader, Segmented, TextInput, buttonClass } from "@/components/ui";
 import { parseNum } from "@/lib/format";
 import { timeUnit } from "@/lib/gym";
 import { uid, deleteRoutine, saveRoutine, useAppData } from "@/lib/store";
@@ -34,7 +34,17 @@ export function RoutineEditor() {
   return <Form key={existing?.id ?? "nueva"} existing={existing} />;
 }
 
-/** Un ejercicio de la rutina tal como se edita: `value` es la repetición objetivo o la duración. */
+/** Una serie cuando las series son distintas: repeticiones y peso tal como se escriben. */
+interface PlanRow {
+  key: string;
+  reps: string;
+  kg: string;
+}
+
+/**
+ * Un ejercicio de la rutina tal como se edita: `value` es la repetición objetivo o la duración.
+ * Con `varied`, cada serie tiene sus repeticiones y su peso (`plan`) y `sets` no se usa.
+ */
 interface Item {
   key: string;
   exerciseId: string;
@@ -43,12 +53,15 @@ interface Item {
   mode: RoutineExercise["mode"];
   sets: number;
   value: string;
+  varied: boolean;
+  plan: PlanRow[];
 }
 
 const valueText = (n: number) => (n > 0 ? String(Math.round(n * 100) / 100).replace(".", ",") : "");
 
 function toItem(e: RoutineExercise): Item {
   const unit = timeUnit(e.muscle);
+  const plan = e.mode === "tiempo" ? [] : (e.plan ?? []);
   return {
     key: uid(),
     exerciseId: e.exerciseId,
@@ -57,6 +70,8 @@ function toItem(e: RoutineExercise): Item {
     mode: e.mode,
     sets: e.sets,
     value: valueText(e.mode === "tiempo" ? (unit === "min" ? e.sec / 60 : e.sec) : e.reps),
+    varied: plan.length > 0,
+    plan: plan.map((p) => ({ key: uid(), reps: valueText(p.reps), kg: valueText(p.kg) })),
   };
 }
 
@@ -69,12 +84,34 @@ function newItem(x: GymExercise): Item {
     mode: x.mode,
     sets: x.mode === "tiempo" ? 1 : 3,
     value: x.mode === "tiempo" ? (timeUnit(x.muscle) === "min" ? "20" : "45") : x.mode === "corporal" ? "12" : "10",
+    varied: false,
+    plan: [],
   };
 }
 
+const toNumber = (text: string) => {
+  const n = parseNum(text);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
 function fromItem(i: Item): RoutineExercise {
-  const n = parseNum(i.value);
-  const value = Number.isFinite(n) && n > 0 ? n : 0;
+  const value = toNumber(i.value);
+  if (i.varied && i.mode !== "tiempo" && i.plan.length > 0) {
+    const plan = i.plan.slice(0, 20).map((r) => ({
+      reps: Math.min(100, Math.round(toNumber(r.reps))),
+      kg: Math.min(1000, Math.round(toNumber(r.kg) * 100) / 100),
+    }));
+    return {
+      exerciseId: i.exerciseId,
+      name: i.name,
+      muscle: i.muscle,
+      mode: i.mode,
+      sets: plan.length,
+      reps: plan[0].reps,
+      sec: 0,
+      plan,
+    };
+  }
   return {
     exerciseId: i.exerciseId,
     name: i.name,
@@ -158,8 +195,6 @@ function Form({ existing }: { existing?: Routine }) {
         ) : (
           <>
             {items.map((it, idx) => {
-              const timed = it.mode === "tiempo";
-              const unit = timeUnit(it.muscle);
               return (
                 <Card key={it.key} className="space-y-3" as="section">
                   <div className="flex items-start gap-1">
@@ -177,47 +212,7 @@ function Form({ existing }: { existing?: Routine }) {
                       <X className="size-4" />
                     </RowButton>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="mb-1.5 text-xs font-medium text-ink-2">Series</p>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          aria-label={`Menos series de ${it.name}`}
-                          disabled={it.sets <= 1}
-                          onClick={() => patch(it.key, { sets: it.sets - 1 })}
-                          className="grid size-11 shrink-0 place-items-center rounded-xl bg-field ring-1 ring-border disabled:opacity-40"
-                        >
-                          <Minus className="size-4" />
-                        </button>
-                        <span className="tabular min-w-6 flex-1 text-center text-lg font-semibold" aria-live="polite">
-                          {it.sets}
-                        </span>
-                        <button
-                          type="button"
-                          aria-label={`Más series de ${it.name}`}
-                          disabled={it.sets >= 20}
-                          onClick={() => patch(it.key, { sets: it.sets + 1 })}
-                          className="grid size-11 shrink-0 place-items-center rounded-xl bg-field ring-1 ring-border disabled:opacity-40"
-                        >
-                          <Plus className="size-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs font-medium text-ink-2">
-                        {timed ? (unit === "min" ? "Minutos" : "Segundos") : "Repeticiones"}
-                      </span>
-                      <input
-                        inputMode="decimal"
-                        autoComplete="off"
-                        value={it.value}
-                        onChange={(e) => patch(it.key, { value: e.target.value })}
-                        aria-label={`${timed ? "Duración" : "Repeticiones"} de ${it.name}`}
-                        className="tabular h-11 w-full rounded-xl bg-field px-3 text-center text-base ring-1 ring-border focus:outline-none focus:ring-2 focus:ring-accent"
-                      />
-                    </label>
-                  </div>
+                  <SetFields it={it} patch={(p) => patch(it.key, p)} />
                 </Card>
               );
             })}
@@ -282,5 +277,146 @@ function RowButton({
     >
       {children}
     </button>
+  );
+}
+
+const numberCell =
+  "tabular h-11 w-full rounded-xl bg-field px-3 text-center text-base ring-1 ring-border focus:outline-none focus:ring-2 focus:ring-accent";
+
+/** Series y repeticiones de un ejercicio: iguales para todas, o cada serie con las suyas y su peso. */
+function SetFields({ it, patch }: { it: Item; patch: (p: Partial<Item>) => void }) {
+  const timed = it.mode === "tiempo";
+  const unit = timeUnit(it.muscle);
+
+  const uniform = (
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <p className="mb-1.5 text-xs font-medium text-ink-2">Series</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label={`Menos series de ${it.name}`}
+            disabled={it.sets <= 1}
+            onClick={() => patch({ sets: it.sets - 1 })}
+            className="grid size-11 shrink-0 place-items-center rounded-xl bg-field ring-1 ring-border disabled:opacity-40"
+          >
+            <Minus className="size-4" />
+          </button>
+          <span className="tabular min-w-6 flex-1 text-center text-lg font-semibold" aria-live="polite">
+            {it.sets}
+          </span>
+          <button
+            type="button"
+            aria-label={`Más series de ${it.name}`}
+            disabled={it.sets >= 20}
+            onClick={() => patch({ sets: it.sets + 1 })}
+            className="grid size-11 shrink-0 place-items-center rounded-xl bg-field ring-1 ring-border disabled:opacity-40"
+          >
+            <Plus className="size-4" />
+          </button>
+        </div>
+      </div>
+      <label className="block">
+        <span className="mb-1.5 block text-xs font-medium text-ink-2">
+          {timed ? (unit === "min" ? "Minutos" : "Segundos") : "Repeticiones"}
+        </span>
+        <input
+          inputMode="decimal"
+          autoComplete="off"
+          value={it.value}
+          onChange={(e) => patch({ value: e.target.value })}
+          aria-label={`${timed ? "Duración" : "Repeticiones"} de ${it.name}`}
+          className={numberCell}
+        />
+      </label>
+    </div>
+  );
+  if (timed) return uniform;
+
+  function setVaried(on: boolean) {
+    if (on === it.varied) return;
+    if (on) {
+      // Parte de lo que ya había: las mismas repeticiones en cada serie, sin peso.
+      patch({
+        varied: true,
+        plan: Array.from({ length: it.sets }, () => ({ key: uid(), reps: it.value, kg: "" })),
+      });
+    } else {
+      patch({ varied: false, sets: Math.max(1, it.plan.length), value: it.plan[0]?.reps ?? it.value, plan: [] });
+    }
+  }
+  const patchRow = (key: string, p: Partial<PlanRow>) =>
+    patch({ plan: it.plan.map((r) => (r.key === key ? { ...r, ...p } : r)) });
+
+  return (
+    <div className="space-y-3">
+      <Segmented
+        label={`Series de ${it.name}`}
+        value={it.varied ? "distintas" : "iguales"}
+        onChange={(v) => setVaried(v === "distintas")}
+        options={[
+          { id: "iguales", label: "Todas iguales" },
+          { id: "distintas", label: "Cada una distinta" },
+        ]}
+      />
+      {it.varied ? (
+        <div className="space-y-2">
+          <div className="grid grid-cols-[1.5rem_1fr_1fr_2rem] items-center gap-2 text-center text-[11px] font-medium text-muted" aria-hidden>
+            <span>#</span>
+            <span>Reps</span>
+            <span>{it.mode === "corporal" ? "+kg (opcional)" : "kg (opcional)"}</span>
+            <span />
+          </div>
+          {it.plan.map((r, i) => (
+            <div key={r.key} role="group" aria-label={`Serie ${i + 1} de ${it.name}`} className="grid grid-cols-[1.5rem_1fr_1fr_2rem] items-center gap-2">
+              <span className="text-center text-sm font-semibold text-ink-2">{i + 1}</span>
+              <input
+                inputMode="decimal"
+                autoComplete="off"
+                value={r.reps}
+                onChange={(e) => patchRow(r.key, { reps: e.target.value })}
+                placeholder="0"
+                aria-label={`Repeticiones de la serie ${i + 1} de ${it.name}`}
+                className={numberCell}
+              />
+              <input
+                inputMode="decimal"
+                autoComplete="off"
+                value={r.kg}
+                onChange={(e) => patchRow(r.key, { kg: e.target.value })}
+                placeholder="—"
+                aria-label={`Peso de la serie ${i + 1} de ${it.name} en kg`}
+                className={numberCell}
+              />
+              <button
+                type="button"
+                aria-label={`Quitar la serie ${i + 1} de ${it.name}`}
+                disabled={it.plan.length <= 1}
+                onClick={() => patch({ plan: it.plan.filter((x) => x.key !== r.key) })}
+                className="grid size-8 place-items-center rounded-full text-muted hover:bg-field hover:text-danger-text disabled:opacity-30"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            disabled={it.plan.length >= 20}
+            onClick={() => {
+              const last = it.plan[it.plan.length - 1];
+              patch({ plan: [...it.plan, { key: uid(), reps: last?.reps ?? "", kg: last?.kg ?? "" }] });
+            }}
+            className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-field text-sm font-semibold text-ink-2 ring-1 ring-border hover:text-ink disabled:opacity-40"
+          >
+            <Plus className="size-4" /> Agregar serie
+          </button>
+          <p className="text-xs text-muted">
+            El peso es opcional: al entrenar lo verás ya escrito y podrás cambiarlo.
+          </p>
+        </div>
+      ) : (
+        uniform
+      )}
+    </div>
   );
 }
