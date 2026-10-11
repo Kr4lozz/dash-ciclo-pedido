@@ -195,6 +195,21 @@ export interface Routine {
   createdAt: number;
 }
 
+/** Una actividad de la agenda: algo que quieres hacer, con fecha y hora opcionales. */
+export interface Task {
+  id: string;
+  title: string;
+  note: string;
+  /** Fecha local YYYY-MM-DD; null = sin fecha (una idea u objetivo para más adelante) */
+  date: string | null;
+  /** Hora HH:MM (24 h); null = sin hora */
+  time: string | null;
+  done: boolean;
+  /** cuándo se marcó como hecha (ms) */
+  doneAt: number | null;
+  createdAt: number;
+}
+
 export interface AppData {
   version: 1;
   profile: Profile | null;
@@ -209,6 +224,8 @@ export interface AppData {
   workouts: Workout[];
   /** rutinas guardadas */
   routines: Routine[];
+  /** actividades de la agenda */
+  tasks: Task[];
   /** ejercicios creados por la persona (los del catálogo vienen en la app) */
   customExercises: GymExercise[];
 }

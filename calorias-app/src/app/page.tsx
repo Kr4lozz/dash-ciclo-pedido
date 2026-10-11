@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
+  CalendarCheck,
   Camera,
   ChevronLeft,
   ChevronRight,
@@ -10,7 +11,6 @@ import {
   Minus,
   Plus,
   Target,
-  Utensils,
   Watch,
   type LucideIcon,
 } from "lucide-react";
@@ -19,13 +19,14 @@ import { ExerciseEditSheet, FoodEditSheet } from "@/components/EditSheets";
 import { LegacyDataCard } from "@/components/LegacyDataCard";
 import { CalorieRing, Meter } from "@/components/Meters";
 import { Card, cx } from "@/components/ui";
+import { byTime } from "@/lib/agenda";
 import { addDays, dateLabel, longDate, todayStr } from "@/lib/dates";
 import { fmt, fmt1 } from "@/lib/format";
 import { exerciseNames, fmtMinutes, workoutTotals } from "@/lib/gym";
 import { computeTargets, dayActivity, sumFoods } from "@/lib/nutrition";
 import { useSession } from "@/lib/session";
 import { setSelectedDate, setWater, useAppData, useSelectedDate } from "@/lib/store";
-import { MEALS, type ExerciseEntry, type FoodEntry, type MealType, type Workout } from "@/lib/types";
+import { MEALS, type ExerciseEntry, type FoodEntry, type MealType, type Task, type Workout } from "@/lib/types";
 
 export default function TodayPage() {
   const data = useAppData();
@@ -62,6 +63,7 @@ export default function TodayPage() {
         ) : null}
         <LegacyDataCard />
         {!data.profile ? <ProfileCallout /> : null}
+        <AgendaRow tasks={data.tasks} date={date} />
 
         <Card>
           <CalorieRing goal={targets.calories} consumed={totals.calories} burned={burned} />
@@ -186,6 +188,34 @@ function DateNav({ date }: { date: string }) {
   );
 }
 
+/** Resumen de la agenda del día, con enlace a la pestaña Agenda. */
+function AgendaRow({ tasks, date }: { tasks: Task[]; date: string }) {
+  const isToday = date === todayStr();
+  const day = tasks.filter((t) => t.date === date);
+  if (day.length === 0 && !isToday) return null;
+  const done = day.filter((t) => t.done).length;
+  const next = day.filter((t) => !t.done).sort(byTime)[0];
+  const summary =
+    day.length === 0
+      ? "Planea lo que quieres hacer hoy"
+      : done === day.length
+        ? `Todo hecho: ${done} ${done === 1 ? "actividad" : "actividades"}`
+        : `${done} de ${day.length} hechas · sigue: ${next?.time ? `${next.time} ` : ""}${next?.title ?? ""}`;
+  return (
+    <Link
+      href={`/agenda?fecha=${date}`}
+      className="flex items-center gap-3 rounded-3xl bg-card p-4 ring-1 ring-border"
+    >
+      <CalendarCheck className="size-5 shrink-0 text-accent-text" />
+      <span className="min-w-0 flex-1 text-sm">
+        <span className="block font-semibold">{isToday ? "Agenda de hoy" : "Agenda del día"}</span>
+        <span className="block truncate text-ink-2">{summary}</span>
+      </span>
+      <ChevronRight className="size-5 shrink-0 text-muted" />
+    </Link>
+  );
+}
+
 function ProfileCallout() {
   return (
     <Link
@@ -252,12 +282,6 @@ function MealCard({
         href={`/agregar?comida=${meal}`}
         label={`Agregar a ${title.toLowerCase()}`}
         bordered={entries.length > 0}
-        extra={{
-          href: `/menu?comida=${meal}`,
-          label: `Qué comer en ${title.toLowerCase()}`,
-          text: "¿Qué como?",
-          Icon: Utensils,
-        }}
       />
     </Card>
   );

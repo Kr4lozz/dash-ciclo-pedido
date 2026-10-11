@@ -15,7 +15,7 @@ import {
   Smartphone,
   Sparkles,
   Target,
-  Utensils,
+  CalendarCheck,
 } from "lucide-react";
 import { WELCOME_SEEN_KEY } from "@/components/ClientGate";
 import { Button, ButtonLink, Card } from "@/components/ui";
@@ -49,9 +49,9 @@ const FEATURES: { Icon: typeof Camera; title: string; text: string }[] = [
     text: "En «Balance del día» ves cuánto gastaste, cuánto comiste y tu déficit (o superávit): gasto − comidas.",
   },
   {
-    Icon: Utensils,
-    title: "Qué comer",
-    text: "En Menú eliges la comida y ves platos caseros peruanos y económicos, o ingredientes por grupo, con los gramos que te tocan según tu meta y tus macros. También puedes pedir el día completo armado.",
+    Icon: CalendarCheck,
+    title: "Tu agenda",
+    text: "En Agenda anotas lo que quieres hacer hoy, con su hora, y lo marcas cuando lo cumples. También puedes dejar actividades para otros días o sin fecha, y pasarlas al calendario de tu celular.",
   },
   {
     Icon: Dumbbell,

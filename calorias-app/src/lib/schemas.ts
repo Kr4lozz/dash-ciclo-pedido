@@ -100,6 +100,22 @@ export const GymSchema = z.object({
   custom: z.array(GymExerciseSchema).max(200),
 });
 
+export const TaskSchema = z.object({
+  id: z.string().min(1).max(64),
+  title: z.string().min(1).max(100),
+  note: z.string().max(300),
+  date: DateStr.nullable(),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable(),
+  done: z.boolean(),
+  doneAt: z.number().finite().nullable(),
+  createdAt: z.number().finite(),
+});
+
+/** Actividades de la agenda: se guardan juntas, no por día. */
+export const PlanSchema = z.object({
+  tasks: z.array(TaskSchema).max(1000),
+});
+
 /** Todo lo registrado en un día: la unidad que se sincroniza. */
 export const DayDocSchema = z.object({
   foods: z.array(FoodEntrySchema).max(300),
@@ -134,6 +150,8 @@ export const DataPutSchema = z.object({
   weights: WeightsSchema.optional(),
   /** rutinas y ejercicios propios */
   gym: GymSchema.optional(),
+  /** actividades de la agenda */
+  plan: PlanSchema.optional(),
   /** null borra el día */
   days: z.record(DateStr, DayDocSchema.nullable()).optional(),
 });
@@ -141,10 +159,12 @@ export const DataPutSchema = z.object({
 export type DayDoc = z.infer<typeof DayDocSchema>;
 export type DataPut = z.infer<typeof DataPutSchema>;
 export type Gym = z.infer<typeof GymSchema>;
+export type Plan = z.infer<typeof PlanSchema>;
 
 export interface ServerData {
   profile: z.infer<typeof ProfileSchema> | null;
   weights: z.infer<typeof WeightsSchema>;
   days: Record<string, DayDoc>;
   gym: Gym | null;
+  plan: Plan | null;
 }

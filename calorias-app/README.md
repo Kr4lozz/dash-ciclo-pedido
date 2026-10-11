@@ -29,15 +29,15 @@ App personal (estilo Fitia) para registrar lo que comes con una foto y las calor
   - actividades con cálculo por MET;
   - pasos;
   - kcal manuales.
-- **Menú** (sin IA, con platos caseros peruanos de bajo costo de `src/lib/menu-data.ts`):
-  - **Opciones:** eliges desayuno, almuerzo, cena o snack y ves lo que te toca (según lo que te
-    queda del día) y el catálogo de platos ordenado por qué tan bien se ajusta, con el peso de
-    cada ingrediente y «Agregar al diario». En «Por ingrediente», listas para elegir una opción de
-    cada grupo (proteína, carbohidrato, menestras, grasa) con la cantidad que toca.
-  - **Día completo:** pregunta qué comidas haces, qué snacks te gustan y qué no comes, y arma el
-    día; las cantidades se ajustan para todo el día a la vez con mínimos cuadrados
-    (`src/lib/menu.ts`). Cada comida tiene «Otra opción» y «Agregar al diario».
-  - Desde Hoy, «¿Qué como?» en cada comida abre sus opciones.
+- **Agenda** (pestaña Agenda, en lugar del antiguo Menú):
+  - **Día:** lo que quieres hacer ese día, con su hora si la tienes (ordenado por hora), y lo que ya
+    hiciste (se marca con un toque); avance «2 de 4 hechas»; los pendientes de días anteriores se
+    pasan a hoy con un toque. Se puede ver cualquier fecha, también las futuras.
+  - **Próximos:** lo que dejaste para otros días, por fecha, y lo que no tiene fecha (ideas u
+    objetivos para más adelante).
+  - Cada actividad se puede **agregar al calendario del celular** (archivo `.ics`, con aviso 10
+    minutos antes si tiene hora; `src/app/api/agenda/ics/route.ts`). Las hechas hace más de 4 meses
+    se borran solas. Hoy muestra un resumen de la agenda del día.
 - **Meta diaria** calculada con Mifflin-St Jeor según sexo, edad, altura, peso, actividad y objetivo. También puedes fijarla a mano.
 - **Resumen del día:** restantes = meta − comidas + ejercicio, macros y agua.
 - **Progreso:** calorías consumidas y quemadas por día (7 o 30 días) y, debajo, el déficit de cada
@@ -152,7 +152,7 @@ KV_REST_API_URL=http://127.0.0.1:8079 KV_REST_API_TOKEN=dev APP_ACCESS_CODE=fami
 - `src/app/page.tsx`: pantalla Hoy.
 - `src/app/agregar/`: agregar comida (foto, texto, manual, recientes).
 - `src/app/ejercicio/`: agregar ejercicio (captura, actividad, pasos, manual).
-- `src/app/menu/`: opciones por comida y día completo (platos, ingredientes y cantidades).
+- `src/app/agenda/`: agenda (día y próximos, hoja para crear y editar); `src/lib/agenda.ts`: orden y grupos.
 - `src/app/gym/`: inicio de Gym (entrenar, rutinas, historial), `entrenar/` (entrenamiento en curso
   y edición) y `rutina/` (editor de rutinas). Catálogo en `src/lib/gym-data.ts`, cálculos en
   `src/lib/gym.ts` y borrador del entrenamiento en `src/lib/gym-draft.ts`.
