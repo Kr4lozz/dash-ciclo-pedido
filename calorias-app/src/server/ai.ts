@@ -22,6 +22,7 @@ Escribe todo en español, con nombres de alimentos cortos y claros.`;
 export const ACTIVITY_PROMPT = `Lees capturas de pantalla de apps de actividad física (Actividad o Fitness de Apple, Apple Watch, Samsung Health, Google Fit, Garmin, etc.) para registrar las calorías que un usuario quemó en el día.
 
 - activeCalories: calorías activas del día. En los anillos de Apple es el anillo rojo "Moverse" / "Move" (por ejemplo "450/600 KCAL" → 450). Usa el valor alcanzado, no la meta, y no uses calorías en reposo ni totales si hay un dato de calorías activas.
+- totalCalories: calorías totales del día (activas + en reposo), si la captura las muestra (por ejemplo "Total 2.430 KCAL" o "Calorías totales"). No la confundas con activeCalories; si no aparece, omítela.
 - exerciseMinutes: valor alcanzado del anillo verde "Ejercicio" / "Exercise".
 - steps: pasos del día, si aparecen.
 - Si un dato no se lee con claridad, omítelo; no lo inventes.

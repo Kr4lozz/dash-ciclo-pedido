@@ -26,6 +26,7 @@ const ACTIVITY = {
   isActivityScreenshot: true,
   source: "Fitness",
   activeCalories: 480,
+  totalCalories: 2430,
   exerciseMinutes: 32,
   steps: 8000,
   notes: "Leído de la captura.",

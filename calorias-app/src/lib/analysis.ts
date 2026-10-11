@@ -43,6 +43,10 @@ export const ActivityReadingSchema = z.object({
     .number()
     .optional()
     .describe("Calorías activas del día (anillo Moverse / 'Move'), en kcal; omitir si no se ven"),
+  totalCalories: z
+    .number()
+    .optional()
+    .describe("Calorías totales del día (activas + en reposo), p. ej. «Total 2.430 KCAL»; omitir si no se ven"),
   exerciseMinutes: z.number().optional().describe("Minutos del anillo Ejercicio; omitir si no se ven"),
   steps: z.number().optional().describe("Pasos del día; omitir si no se ven"),
   notes: z.string().describe("Una frase: qué se leyó o por qué no se pudo leer"),
@@ -52,6 +56,8 @@ export interface ActivityReading {
   isActivityScreenshot: boolean;
   source: string;
   activeCalories: number | null;
+  /** calorías totales del día (activas + reposo), si la captura las muestra */
+  totalCalories: number | null;
   exerciseMinutes: number | null;
   steps: number | null;
   notes: string;

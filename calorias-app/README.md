@@ -64,6 +64,14 @@ registros se guardan en la nube: no se pierden al cambiar de celular y cada uno 
   cuota gratuita de Gemini de toda la familia.
 - Si antes usaste la app sin cuenta, al entrar aparece la opción de pasar esos registros a tu
   cuenta.
+- **Fitness automático (iPhone):** en **Perfil → Fitness automático** cada persona crea una llave
+  personal (`POST /api/fitness/key`; en la base solo queda su hash) y arma un Atajo con una
+  automatización «al abrir Fitness» que lee Salud (energía activa y en reposo) y manda a
+  `POST /api/fitness` los días de una lista (hoy y ayer por defecto). Cada día de la app muestra
+  los números de su fecha; el total es activas + reposo. El endpoint acepta `{token, fecha, activa,
+  reposo|total}` o una lista `days`, en español o inglés, con números o textos con coma. Se puede
+  rotar o desconectar la llave. En Android (o sin Atajo) se sigue subiendo la captura: la app lee
+  las kcal de Moverse **y el total** de la captura (OCR en el celular o IA).
 - **Uso de la app:** en **Perfil → Familia → Uso de la app** quien administra ve, por persona,
   su último uso, los días activos, las aperturas, los toques (aproximados), los registros hechos
   y los análisis con IA de los últimos 7 o 30 días, con las pantallas más vistas. Solo son
@@ -152,6 +160,7 @@ KV_REST_API_URL=http://127.0.0.1:8079 KV_REST_API_TOKEN=dev APP_ACCESS_CODE=fami
 - `src/app/bienvenida/`, `src/app/entrar/`, `src/app/registro/`, `src/app/familia/`: inicio, acceso y administración de la familia.
 - `src/app/api/analyze/route.ts`: acceso, límites y respuesta del análisis; `src/server/ai.ts`: cadena de modelos de Gemini, IA de respaldo y diagnóstico (`src/app/api/family/ai/`, `src/components/AiStatus.tsx`).
 - `src/app/api/{session,auth,data,family}/`: cuentas y datos en la base (`src/server/`).
+- `src/server/fitness.ts`, `src/app/api/fitness/`, `src/components/FitnessCard.tsx`: conexión automática con Fitness (llave, receptor del Atajo y pasos en Perfil).
 - `src/lib/usage.ts`, `src/components/UsageTracker.tsx`, `src/app/api/usage/`, `src/app/api/family/usage/`, `src/components/FamilyUsage.tsx`: contadores de uso y su panel para quien administra (`src/lib/usage-shared.ts` define qué se cuenta).
 - `src/lib/store.ts`, `src/lib/session.ts`: datos en el navegador y sincronización con la cuenta.
 - `src/lib/ocr.ts`, `src/lib/activity-text.ts`: OCR de capturas de actividad (Tesseract.js, en el navegador). `npm run build` copia el motor a `public/ocr` con `scripts/copy-ocr-assets.mjs`.

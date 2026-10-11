@@ -53,4 +53,7 @@ export const keys = {
   ai: (id: string, day: string) => `ai:${id}:${day}`,
   usage: (id: string, month: string) => `use:${id}:${month}`, // hash: "dd:contador" → veces
   seen: "seen", // hash: usuario → última actividad (ms)
+  fitnessKey: (uid: string) => `fit:${uid}`, // {h: hash de la llave de Fitness vigente}
+  fitnessToken: (hash: string) => `fitk:${hash}`, // {uid} de quien tiene esa llave
+  fitnessSync: (uid: string) => `fits:${uid}`, // última recepción del atajo
 };
