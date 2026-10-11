@@ -33,6 +33,10 @@ App personal (estilo Fitia) para registrar lo que comes con una foto y las calor
   - **Día:** lo que quieres hacer ese día, con su hora si la tienes (ordenado por hora), y lo que ya
     hiciste (se marca con un toque); avance «2 de 4 hechas»; los pendientes de días anteriores se
     pasan a hoy con un toque. Se puede ver cualquier fecha, también las futuras.
+  - **Calendario** (debajo de las actividades): **Horas** muestra el día con cada actividad en su
+    hora (de 6:00 a 22:00, ampliado si hace falta, o las 24 horas; tocar una hora vacía crea ahí la
+    actividad) y **Mes** muestra el mes con un punto en los días que tienen actividades (tocar un día
+    muestra sus horas).
   - **Próximos:** lo que dejaste para otros días, por fecha, y lo que no tiene fecha (ideas u
     objetivos para más adelante).
   - Cada actividad se puede **agregar al calendario del celular** (archivo `.ics`, con aviso 10
