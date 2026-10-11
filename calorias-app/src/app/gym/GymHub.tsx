@@ -198,6 +198,14 @@ function target(e: RoutineExercise): string {
     const time = timeUnit(e.muscle) === "min" ? `${Math.round(e.sec / 60)} min` : `${e.sec} s`;
     return e.sets > 1 ? `${e.sets} × ${time}` : time;
   }
+  if (e.plan?.length) {
+    // Series distintas: «12×40 · 10×50 · 8×60 kg» (o solo las repeticiones si no hay pesos).
+    const weighted = e.plan.some((p) => p.kg > 0);
+    const kg = (n: number) => String(n).replace(".", ",");
+    return weighted
+      ? `${e.plan.map((p) => (p.kg > 0 ? `${p.reps}×${kg(p.kg)}` : String(p.reps))).join(" · ")} kg`
+      : `${e.plan.map((p) => p.reps).join(" · ")} reps`;
+  }
   return `${e.sets} × ${e.reps}`;
 }
 

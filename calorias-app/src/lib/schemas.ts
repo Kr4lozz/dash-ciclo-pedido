@@ -87,6 +87,7 @@ export const RoutineSchema = z.object({
         sets: amount(20),
         reps: amount(100),
         sec: amount(3600),
+        plan: z.array(z.object({ reps: amount(100), kg: amount(1000) })).min(1).max(20).optional(),
       }),
     )
     .max(40),
