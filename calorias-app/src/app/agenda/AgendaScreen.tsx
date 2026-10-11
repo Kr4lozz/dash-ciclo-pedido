@@ -8,6 +8,7 @@ import { byTime, overdue, tasksOn, tomorrow, upcoming } from "@/lib/agenda";
 import { addDays, dateLabel, isValidDateStr, longDate, todayStr } from "@/lib/dates";
 import { updateTask, toggleTask, useAppData } from "@/lib/store";
 import type { Task } from "@/lib/types";
+import { DayCalendar } from "./DayCalendar";
 import { TaskSheet, type TaskDraft } from "./TaskSheet";
 
 type View = "dia" | "proximos";
@@ -23,7 +24,7 @@ export function AgendaScreen() {
   const [date, setDate] = useState(isValidDateStr(fromLink) ? fromLink : today);
   const [draft, setDraft] = useState<TaskDraft | null>(null);
 
-  const add = (d: string | null) => setDraft({ title: "", date: d, time: "", note: "" });
+  const add = (d: string | null, time = "") => setDraft({ title: "", date: d, time, note: "" });
 
   return (
     <>
@@ -39,7 +40,15 @@ export function AgendaScreen() {
           ]}
         />
         {view === "dia" ? (
-          <DayView date={date} setDate={setDate} today={today} tasks={data.tasks} onAdd={() => add(date)} onEdit={(t) => setDraft(toDraft(t))} />
+          <DayView
+            date={date}
+            setDate={setDate}
+            today={today}
+            tasks={data.tasks}
+            onAdd={() => add(date)}
+            onAddAt={(d, time) => add(d, time)}
+            onEdit={(t) => setDraft(toDraft(t))}
+          />
         ) : (
           <UpcomingView today={today} tasks={data.tasks} onAdd={() => add(tomorrow(today))} onEdit={(t) => setDraft(toDraft(t))} />
         )}
@@ -55,6 +64,7 @@ function DayView({
   today,
   tasks,
   onAdd,
+  onAddAt,
   onEdit,
 }: {
   date: string;
@@ -62,6 +72,7 @@ function DayView({
   today: string;
   tasks: Task[];
   onAdd: () => void;
+  onAddAt: (date: string, time: string) => void;
   onEdit: (t: Task) => void;
 }) {
   const day = tasksOn(tasks, date);
@@ -178,6 +189,8 @@ function DayView({
           </ul>
         </Card>
       ) : null}
+
+      <DayCalendar date={date} today={today} tasks={tasks} onPickDate={setDate} onAdd={onAddAt} onEdit={onEdit} />
     </>
   );
 }
