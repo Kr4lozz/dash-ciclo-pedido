@@ -1,4 +1,4 @@
-import { ApiError, GoogleGenAI, type Part } from "@google/genai";
+import { ApiError, GoogleGenAI, ThinkingLevel, type Part } from "@google/genai";
 import { deflateSync } from "node:zlib";
 import { z } from "zod";
 import type { AiReport, Attempt, ChainProbe, ProbeRow } from "@/lib/ai-shared";
@@ -55,8 +55,8 @@ class HttpError extends Error {
 // ---------- Configuración ----------
 
 /** Tope de tiempo de cada intento y de toda la solicitud (la función de Vercel dura 60 s). */
-const GEMINI_CAP_MS = Number(process.env.AI_ATTEMPT_TIMEOUT_MS) || 30_000;
-const COMPAT_CAP_MS = Number(process.env.AI_ATTEMPT_TIMEOUT_MS) || 25_000;
+const GEMINI_CAP_MS = Number(process.env.AI_ATTEMPT_TIMEOUT_MS) || 22_000;
+const COMPAT_CAP_MS = Number(process.env.AI_ATTEMPT_TIMEOUT_MS) || 20_000;
 const BUDGET_MS = 55_000;
 const MIN_ATTEMPT_MS = 2_000;
 
@@ -74,14 +74,25 @@ export interface Compat {
   label: string;
   baseURL: string;
   key: string;
-  model: string;
+  /** modelos con visión, en orden: si uno ya no existe (404) se prueba el siguiente */
+  models: string[];
 }
 
+// Los nombres de modelos de estos servicios cambian seguido; por eso cada uno trae varios candidatos
+// y se puede fijar uno propio con GROQ_MODEL, MISTRAL_MODEL u OPENAI_MODEL.
 const PRESETS = [
-  { id: "groq", label: "Groq", baseURL: "https://api.groq.com/openai/v1", prefix: "GROQ", model: "meta-llama/llama-4-scout-17b-16e-instruct" },
-  { id: "mistral", label: "Mistral", baseURL: "https://api.mistral.ai/v1", prefix: "MISTRAL", model: "mistral-small-latest" },
-  { id: "openai", label: "OpenAI", baseURL: "https://api.openai.com/v1", prefix: "OPENAI", model: "gpt-4o-mini" },
+  { id: "groq", label: "Groq", baseURL: "https://api.groq.com/openai/v1", prefix: "GROQ", models: ["qwen/qwen3.8-27b", "qwen/qwen3.6-27b", "meta-llama/llama-4-scout-17b-16e-instruct"] },
+  { id: "mistral", label: "Mistral", baseURL: "https://api.mistral.ai/v1", prefix: "MISTRAL", models: ["mistral-small-latest"] },
+  { id: "openai", label: "OpenAI", baseURL: "https://api.openai.com/v1", prefix: "OPENAI", models: ["gpt-4o-mini"] },
 ] as const;
+
+/** Último modelo que respondió en cada proveedor: se prueba primero. */
+const preferred = new Map<string, string>();
+
+const orderedModels = (p: Compat) => {
+  const first = preferred.get(p.id);
+  return first && p.models.includes(first) ? [first, ...p.models.filter((m) => m !== first)] : p.models;
+};
 
 /** Las IA de respaldo configuradas, en el orden en que se prueban. */
 export function compatProviders(): Compat[] {
@@ -91,12 +102,14 @@ export function compatProviders(): Compat[] {
   const key = env.FALLBACK_AI_API_KEY?.trim();
   const model = env.FALLBACK_AI_MODEL?.trim();
   if (base && key && model) {
-    list.push({ id: "alternativa", label: env.FALLBACK_AI_NAME?.trim() || "IA alternativa", baseURL: base, key, model });
+    list.push({ id: "alternativa", label: env.FALLBACK_AI_NAME?.trim() || "IA alternativa", baseURL: base, key, models: [model] });
   }
   for (const p of PRESETS) {
     const k = env[`${p.prefix}_API_KEY`]?.trim();
     if (k) {
-      list.push({ id: p.id, label: p.label, baseURL: p.baseURL, key: k, model: env[`${p.prefix}_MODEL`]?.trim() || p.model });
+      const own = env[`${p.prefix}_MODEL`]?.trim();
+      const baseURL = env[`${p.prefix}_BASE_URL`]?.trim().replace(/\/+$/, "") || p.baseURL;
+      list.push({ id: p.id, label: p.label, baseURL, key: k, models: own ? [own] : [...p.models] });
     }
   }
   return list;
@@ -105,7 +118,7 @@ export function compatProviders(): Compat[] {
 export const aiConfigured = () => geminiModels().length > 0 || compatProviders().length > 0;
 
 /** Nombre del modelo principal (para mostrar). */
-export const primaryModel = () => geminiModels()[0] ?? compatProviders()[0]?.model ?? "";
+export const primaryModel = () => geminiModels()[0] ?? compatProviders()[0]?.models[0] ?? "";
 
 export function providerLabel(id: string): string {
   if (id === "gemini") return "Gemini";
@@ -214,11 +227,12 @@ async function callGemini<T extends z.ZodType>(
   const res = await geminiClient(timeout).models.generateContent({
     model,
     contents: parts,
+    // Gemini 3 pide dejar la temperatura en su valor por defecto (más baja puede dar bucles) y
+    // razona mucho por defecto; para estimar una comida basta poco razonamiento.
     config: {
       systemInstruction: instruction,
       responseMimeType: "application/json",
-      ...(mode === "schema" ? { responseJsonSchema } : {}),
-      temperature: 0.2,
+      ...(mode === "schema" ? { responseJsonSchema, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
     },
   });
   const text = res.text;
@@ -238,20 +252,24 @@ async function errorText(res: Response): Promise<string> {
 
 /** Quita bloques ```json y texto alrededor del objeto. */
 function extractJson(text: string): string {
-  const t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const t = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
   const a = t.indexOf("{");
   const b = t.lastIndexOf("}");
   return a >= 0 && b > a ? t.slice(a, b + 1) : t;
 }
 
 /** Pide un completado a una API compatible con OpenAI; devuelve el texto de la respuesta. */
-async function chat(p: Compat, content: unknown, timeout: number, strict: boolean): Promise<string> {
+async function chat(p: Compat, model: string, content: unknown, timeout: number, strict: boolean): Promise<string> {
   const send = (bare: boolean) =>
     fetch(`${p.baseURL}/chat/completions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${p.key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: p.model,
+        model,
         messages: [{ role: "user", content }],
         ...(bare ? {} : { temperature: 0.2, ...(strict ? { response_format: { type: "json_object" } } : {}) }),
       }),
@@ -269,6 +287,7 @@ async function chat(p: Compat, content: unknown, timeout: number, strict: boolea
 
 async function callCompat<T extends z.ZodType>(
   p: Compat,
+  model: string,
   schema: T,
   instruction: string,
   input: AiInput,
@@ -285,7 +304,7 @@ async function callCompat<T extends z.ZodType>(
         { type: "image_url", image_url: { url: `data:${input.image.mediaType};base64,${input.image.data}` } },
       ]
     : prompt;
-  return schema.parse(JSON.parse(extractJson(await chat(p, content, timeout, true))));
+  return schema.parse(JSON.parse(extractJson(await chat(p, model, content, timeout, true))));
 }
 
 // ---------- Cadena de intentos ----------
@@ -354,8 +373,15 @@ export async function runAi<T extends z.ZodType>(
     }
   }
   for (const p of compatProviders()) {
-    const r = await step(p.id, p.model, COMPAT_CAP_MS, (t) => callCompat(p, schema, instruction, input, t));
-    if ("value" in r) return { value: r.value, provider: p.id, model: p.model, attempts };
+    for (const model of orderedModels(p)) {
+      const r = await step(p.id, model, COMPAT_CAP_MS, (t) => callCompat(p, model, schema, instruction, input, t));
+      if ("value" in r) {
+        preferred.set(p.id, model);
+        return { value: r.value, provider: p.id, model, attempts };
+      }
+      // Un modelo que ya no existe (404) o no acepta la solicitud (400): se prueba el siguiente.
+      if (r.status !== 404 && r.status !== 400) break;
+    }
   }
   throw new AiFailure(attempts);
 }
@@ -363,7 +389,8 @@ export async function runAi<T extends z.ZodType>(
 // ---------- Diagnóstico ----------
 
 const PROBE_MS = 15_000;
-const PROBE_CHAIN_BUDGET_MS = 20_000;
+const PROBE_TEXT_BUDGET_MS = 25_000;
+const PROBE_PHOTO_BUDGET_MS = 45_000;
 
 let pngCache: string | undefined;
 
@@ -419,7 +446,7 @@ async function probeGemini(model: string): Promise<ProbeRow> {
     const res = await geminiClient(PROBE_MS).models.generateContent({
       model,
       contents: "Responde solo con la palabra ok.",
-      config: { maxOutputTokens: 32, temperature: 0 },
+      config: { maxOutputTokens: 32 },
     });
     return {
       provider: "gemini",
@@ -436,14 +463,40 @@ async function probeGemini(model: string): Promise<ProbeRow> {
   }
 }
 
-async function probeCompat(p: Compat): Promise<ProbeRow> {
-  const t0 = Date.now();
+/** Prueba los modelos de un proveedor en orden hasta que uno responda (o se acaben). */
+async function probeCompat(p: Compat): Promise<ProbeRow[]> {
+  const rows: ProbeRow[] = [];
+  for (const model of orderedModels(p)) {
+    const t0 = Date.now();
+    try {
+      await chat(p, model, "Responde solo con la palabra ok.", PROBE_MS, false);
+      rows.push({ provider: p.id, label: p.label, model, ok: true, status: 200, ms: Date.now() - t0, detail: "" });
+      break;
+    } catch (err) {
+      const a = failed(p.id, p.label, err, Date.now() - t0);
+      rows.push({ provider: p.id, label: p.label, model, ok: false, status: a.status, ms: a.ms, detail: a.reason });
+      if (a.status !== 404 && a.status !== 400) break;
+    }
+  }
+  return rows;
+}
+
+/** Modelos que ve la llave de un proveedor alternativo (para elegir GROQ_MODEL y similares). */
+async function listCompatModels(p: Compat): Promise<{ label: string; ids: string[] }> {
   try {
-    await chat(p, "Responde solo con la palabra ok.", PROBE_MS, false);
-    return { provider: p.id, label: p.label, model: p.model, ok: true, status: 200, ms: Date.now() - t0, detail: "" };
-  } catch (err) {
-    const a = failed(p.id, p.model, err, Date.now() - t0);
-    return { provider: p.id, label: p.label, model: p.model, ok: false, status: a.status, ms: a.ms, detail: a.reason };
+    const res = await fetch(`${p.baseURL}/models`, {
+      headers: { Authorization: `Bearer ${p.key}` },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return { label: p.label, ids: [] };
+    const body = (await res.json()) as { data?: { id?: string }[] };
+    const skip = /whisper|tts|guard|embed|moderation|safeguard|orpheus|transcri|speech/i;
+    return {
+      label: p.label,
+      ids: (body.data ?? []).map((m) => m.id ?? "").filter((id) => id && !skip.test(id)).sort(),
+    };
+  } catch {
+    return { label: p.label, ids: [] };
   }
 }
 
@@ -466,13 +519,13 @@ async function listGeminiModels(): Promise<string[]> {
   }
 }
 
-async function probeChain(test: ChainProbe["test"]): Promise<ChainProbe> {
+async function probeChain(test: ChainProbe["test"], budgetMs: number): Promise<ChainProbe> {
   const input: AiInput =
     test === "texto"
       ? { text: "Estima las calorías y macros de esta comida: 1 manzana mediana." }
       : { text: "Analiza la comida de la foto.", image: { mediaType: "image/png", data: tinyPng() } };
   try {
-    const r = await runAi(AnalysisSchema, FOOD_PROMPT, input, PROBE_CHAIN_BUDGET_MS);
+    const r = await runAi(AnalysisSchema, FOOD_PROMPT, input, budgetMs);
     return { test, ok: true, via: `${providerLabel(r.provider)} · ${r.model}`, attempts: r.attempts };
   } catch (err) {
     if (err instanceof AiFailure) return { test, ok: false, via: null, attempts: err.attempts };
@@ -494,6 +547,10 @@ function verdictOf(r: Omit<AiReport, "verdict">): string {
     return gemOk === gem.length
       ? "Todo funciona: Gemini responde con todos sus modelos. Si falló antes, fue algo pasajero de Google."
       : "Gemini responde con algunos modelos y la app usa esos; los demás están fallando ahora.";
+  }
+  if (r.chains[0]?.ok && !r.chains[1]?.ok && gemOk > 0 && r.chains[1]) {
+    const photo = [...new Set(r.chains[1].attempts.map((a) => `${a.model} ${a.status ?? a.reason.toLowerCase()}`))].join(", ");
+    return `Los análisis de texto funcionan, pero los de foto fallan o tardan demasiado (${photo}). Gemini responde bien a lo simple: el problema es con las imágenes.`;
   }
   if (chainsOk) {
     return gemOk === gem.length
@@ -524,17 +581,23 @@ function verdictOf(r: Omit<AiReport, "verdict">): string {
 export async function probeAi(): Promise<AiReport> {
   const models = geminiModels();
   const compat = compatProviders();
-  const [rows, textChain, available] = await Promise.all([
+  const [probed, textChain, photoChain, available] = await Promise.all([
     Promise.all([...models.map(probeGemini), ...compat.map(probeCompat)]),
-    probeChain("texto"),
+    probeChain("texto", PROBE_TEXT_BUDGET_MS),
+    probeChain("foto", PROBE_PHOTO_BUDGET_MS),
     listGeminiModels(),
   ]);
-  const photoChain = await probeChain("foto");
+  const rows = probed.flat();
+  // Si el respaldo no tiene ningún modelo que responda, se muestra qué modelos ve esa llave.
+  const backupModels = (
+    await Promise.all(compat.filter((p) => !rows.some((x) => x.provider === p.id && x.ok)).map(listCompatModels))
+  ).filter((m) => m.ids.length > 0);
   const report = {
     geminiKey: Boolean(process.env.GEMINI_API_KEY),
     models,
-    fallbacks: compat.map((p) => `${p.label} · ${p.model}`),
+    fallbacks: compat.map((p) => p.label),
     available,
+    backupModels,
     rows,
     chains: [textChain, photoChain],
   };

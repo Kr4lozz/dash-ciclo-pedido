@@ -7,8 +7,8 @@
 //   GEMINI_API_KEY=falsa npm run dev
 //
 // Control: POST /__mode {"gemini":{"gemini-flash-latest":"500"},"compat":"ok"}, POST /__reset, GET /__log.
-// Modos de Gemini por modelo: ok | 500 | 503 | 404 | 429 | 400 | badkey | schema500 | slow | empty | garbage.
-// Modos de la IA compatible: ok | 500 | 503 | 429 | 401 | fences | strict400 | garbage | slow.
+// Modos de Gemini por modelo: ok | 500 | 503 | 404 | 429 | 400 | badkey | schema500 | image500 | imageslow | slow | empty | garbage.
+// Modos de la IA compatible (global o por modelo con compatByModel): ok | 500 | 503 | 404 | 429 | 401 | fences | think | strict400 | garbage | slow.
 
 import http from "node:http";
 
@@ -31,7 +31,7 @@ const ACTIVITY = {
   notes: "Leído de la captura.",
 };
 
-const state = { gemini: {}, compat: "ok", log: [] };
+const state = { gemini: {}, compat: "ok", compatByModel: {}, log: [] };
 
 const kindOf = (text) => (text.includes("Lees capturas") || text.includes("actividad de esta captura") ? "actividad" : text.includes("palabra ok") ? "ping" : "comida");
 const payloadOf = (kind) => (kind === "actividad" ? ACTIVITY : kind === "ping" ? null : FOOD);
@@ -67,11 +67,13 @@ http
       if (url.pathname === "/__mode") {
         if (body.gemini) state.gemini = body.gemini;
         if (body.compat) state.compat = body.compat;
+        if (body.compatByModel) state.compatByModel = body.compatByModel;
         return send(200, state);
       }
       if (url.pathname === "/__reset") {
         state.gemini = {};
         state.compat = "ok";
+        state.compatByModel = {};
         state.log = [];
         return send(200, state);
       }
@@ -96,13 +98,16 @@ http
         const text = JSON.stringify([body.systemInstruction ?? "", body.contents ?? ""]);
         const kind = kindOf(text);
         const mode = state.gemini[model] ?? "ok";
-        state.log.push({ api: "gemini", model, mode, schemaMode, kind, image: text.includes("inlineData") });
+        const hasImage = text.includes("inlineData");
+        state.log.push({ api: "gemini", model, mode, schemaMode, kind, image: hasImage, temperature: cfg.temperature, thinking: cfg.thinkingConfig?.thinkingLevel });
         const fail = (code, message) => {
           const [status, msg] = GOOGLE_ERRORS[code];
           return send(code, { error: { code, message: message ?? msg, status } });
         };
         if (mode === "badkey") return fail(400, "API key not valid. Please pass a valid API key.");
         if (mode === "schema500" && schemaMode) return fail(500);
+        if (mode === "image500" && hasImage) return fail(500);
+        if (mode === "imageslow" && hasImage) await wait(SLOW_MS);
         if (GOOGLE_ERRORS[mode]) return fail(Number(mode));
         if (mode === "slow") await wait(SLOW_MS);
         if (mode === "empty") return send(200, { promptFeedback: { blockReason: "SAFETY" } });
@@ -114,11 +119,14 @@ http
       }
 
       // ----- compatible con OpenAI -----
+      if (url.pathname === "/v1/models" && req.method === "GET") {
+        return send(200, { data: [{ id: "qwen/qwen3.6-27b" }, { id: "whisper-large-v3" }, { id: "mock-vision" }] });
+      }
       if (url.pathname === "/v1/chat/completions" && req.method === "POST") {
         const content = body.messages?.[0]?.content;
         const text = typeof content === "string" ? content : (content?.find((p) => p.type === "text")?.text ?? "");
         const kind = kindOf(text);
-        const mode = state.compat;
+        const mode = state.compatByModel[body.model] ?? state.compat;
         state.log.push({
           api: "compat",
           model: body.model,
@@ -131,6 +139,7 @@ http
         });
         const err = (status, message) => send(status, { error: { message, type: "error" } });
         if (mode === "500") return err(500, "upstream exploded");
+        if (mode === "404") return err(404, `The model \`${body.model}\` does not exist or you do not have access to it.`);
         if (mode === "429") return err(429, "Rate limit reached");
         if (mode === "503") return err(503, "The server is overloaded");
         if (mode === "401") return err(401, "Incorrect API key provided: sk-abcdefghijklmnopqrstuvwxyz");
@@ -139,7 +148,14 @@ http
         }
         if (mode === "slow") await wait(SLOW_MS);
         const json = kind === "ping" ? "ok" : JSON.stringify(payloadOf(kind));
-        const out = mode === "garbage" ? "no puedo ayudarte con eso" : mode === "fences" ? `Aquí tienes:\n\`\`\`json\n${json}\n\`\`\`` : json;
+        const out =
+          mode === "garbage"
+            ? "no puedo ayudarte con eso"
+            : mode === "fences"
+              ? `Aquí tienes:\n\`\`\`json\n${json}\n\`\`\``
+              : mode === "think"
+                ? `<think>pensando {con llaves}</think>${json}`
+                : json;
         return send(200, { choices: [{ index: 0, message: { role: "assistant", content: out } }] });
       }
 

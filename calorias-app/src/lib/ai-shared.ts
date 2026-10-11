@@ -39,6 +39,8 @@ export interface AiReport {
   fallbacks: string[];
   /** modelos «flash» que ve la llave de Gemini */
   available: string[];
+  /** modelos que ve la llave de cada IA de respaldo (solo si ninguno de los probados respondió) */
+  backupModels: { label: string; ids: string[] }[];
   rows: ProbeRow[];
   chains: ChainProbe[];
   verdict: string;

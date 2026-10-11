@@ -107,7 +107,9 @@ el intento no se descuenta.
   responde, avisando que fue otra IA: `GROQ_API_KEY` (gratis en
   [console.groq.com/keys](https://console.groq.com/keys), recomendada), `MISTRAL_API_KEY`
   ([console.mistral.ai/api-keys](https://console.mistral.ai/api-keys)) u `OPENAI_API_KEY` (de pago).
-  Cada una admite su `GROQ_MODEL`, `MISTRAL_MODEL` u `OPENAI_MODEL`. Para otra IA con API
+  Cada una admite su `GROQ_MODEL`, `MISTRAL_MODEL` u `OPENAI_MODEL` (los nombres de modelos cambian
+  seguido: Groq trae varios candidatos y pasa al siguiente si uno ya no existe, y «Estado de la IA»
+  lista los modelos que ve tu llave). Para otra IA con API
   compatible con OpenAI y que acepte imágenes: `FALLBACK_AI_BASE_URL`, `FALLBACK_AI_API_KEY`,
   `FALLBACK_AI_MODEL` y, opcional, `FALLBACK_AI_NAME`. Los modelos de respaldo pueden ser menos
   precisos que Gemini.
