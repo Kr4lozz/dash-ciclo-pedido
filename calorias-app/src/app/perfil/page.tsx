@@ -19,6 +19,7 @@ import {
   Upload,
   Users,
 } from "lucide-react";
+import { FitnessCard } from "@/components/FitnessCard";
 import { LegacyDataCard } from "@/components/LegacyDataCard";
 import { Sheet } from "@/components/Sheet";
 import {
@@ -143,6 +144,7 @@ export default function PerfilPage() {
         ) : (
           <LocalModeCard />
         )}
+        {session.status === "user" ? <FitnessCard /> : null}
         <LegacyDataCard />
         {/* Se vuelve a montar si el perfil cambia (p. ej. llega desde otro dispositivo). */}
         <ProfileForm key={JSON.stringify(data.profile)} profile={data.profile} showName={!account} />

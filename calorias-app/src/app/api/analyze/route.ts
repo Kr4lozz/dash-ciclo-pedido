@@ -157,6 +157,8 @@ function cleanActivity(a: z.infer<typeof ActivityReadingSchema>): ActivityReadin
     isActivityScreenshot: a.isActivityScreenshot,
     source: a.source.trim().slice(0, 60),
     activeCalories: n(a.activeCalories),
+    // El total incluye las activas: si no cuadra, se descarta.
+    totalCalories: n(a.totalCalories) !== null && (n(a.activeCalories) ?? 0) <= (n(a.totalCalories) ?? 0) ? n(a.totalCalories) : null,
     exerciseMinutes: n(a.exerciseMinutes),
     steps: n(a.steps),
     notes: a.notes.trim().slice(0, 300),

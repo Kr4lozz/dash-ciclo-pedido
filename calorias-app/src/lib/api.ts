@@ -2,6 +2,7 @@
 
 import type { SessionUser } from "./account";
 import type { AiStatus } from "./ai-shared";
+import type { FitnessStatus } from "./fitness-shared";
 import type { ActivityReading, Analysis, AnalyzeRequest } from "./analysis";
 import { getAccessCode, notifyUnauthorized } from "./store";
 import { toast } from "./toast";
@@ -110,6 +111,10 @@ export const accountApi = {
   changePassword: (body: { current: string; next: string }) =>
     post2<{ ok: true }>("/api/auth/password", body),
   family: () => call<{ members: FamilyMember[]; familyCode: string }>("/api/family"),
+  /** Conexión automática con Fitness (iPhone): estado, llave nueva y desconectar. */
+  fitness: () => call<FitnessStatus>("/api/fitness"),
+  fitnessKey: () => call<{ token: string }>("/api/fitness/key", { method: "POST" }),
+  fitnessOff: () => call<{ ok: true }>("/api/fitness", { method: "DELETE" }),
   /** Prueba la IA (solo quien administra): modelos, cadena real y base de datos. */
   aiStatus: () => call<AiStatus>("/api/family/ai", { method: "POST" }),
   /** Uso de la app de cada miembro en los últimos `days` días hasta `to` (solo quien administra). */

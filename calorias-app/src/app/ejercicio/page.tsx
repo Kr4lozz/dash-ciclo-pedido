@@ -95,6 +95,7 @@ function ScreenshotMode({ date }: { date: string }) {
   const [preview, setPreview] = useState<PreparedImage | null>(null);
   const [reading, setReading] = useState<ActivityReading | null>(null);
   const [kcal, setKcal] = useState("");
+  const [totalKcal, setTotalKcal] = useState("");
   const [progress, setProgress] = useState<number | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState<{ message: string; status: number } | null>(null);
@@ -106,6 +107,7 @@ function ScreenshotMode({ date }: { date: string }) {
   function show(r: ActivityReading) {
     setReading(r);
     setKcal(r.activeCalories != null ? String(r.activeCalories) : "");
+    setTotalKcal(r.totalCalories != null ? String(r.totalCalories) : "");
   }
 
   async function onFile(file: File | undefined) {
@@ -140,15 +142,19 @@ function ScreenshotMode({ date }: { date: string }) {
   }
 
   const calories = parseNum(kcal);
-  const valid = calories > 0;
+  const typedTotal = parseNum(totalKcal);
+  const hasTotal = typedTotal > 0;
+  // El total incluye las activas: no puede ser menor.
+  const totalOk = !hasTotal || typedTotal >= calories;
+  const valid = calories > 0 && totalOk;
 
   function save() {
     if (!valid || !reading) return;
     const active = Math.round(calories);
-    // Las totales anotadas antes se conservan solo si siguen siendo coherentes.
-    const total = existing?.total != null && existing.total >= active ? existing.total : null;
+    // Sin total en la captura, el anotado antes se conserva solo si sigue siendo coherente.
+    const total = hasTotal ? Math.round(typedTotal) : existing?.total != null && existing.total >= active ? existing.total : null;
     setBurned(date, { active, total });
-    toast(`Apple Fitness: ${fmt(active)} kcal activas`);
+    toast(`Apple Fitness: ${fmt(active)} activas${total != null ? ` · ${fmt(total)} total` : ""}`);
     router.push("/");
   }
 
@@ -172,8 +178,8 @@ function ScreenshotMode({ date }: { date: string }) {
           </div>
           <p className="mt-3 font-semibold">Sube una captura de tus anillos</p>
           <p className="mt-1 text-sm text-ink-2">
-            Abre la app Fitness del iPhone, haz una captura del resumen del día y súbela. La app lee
-            las kcal del anillo Moverse en tu celular, sin IA y gratis.
+            Abre la app Fitness, haz una captura del resumen del día y súbela. La app lee en tu celular,
+            sin IA y gratis, las kcal del anillo Moverse y el total del día si aparece en la captura.
           </p>
           <Button className="mt-5 w-full" onClick={() => inputRef.current?.click()}>
             <ImagePlus className="size-5" /> Elegir captura
@@ -196,6 +202,7 @@ function ScreenshotMode({ date }: { date: string }) {
                 <p className="font-semibold">{reading.source || "Actividad"}</p>
                 <dl className="space-y-1 text-ink-2">
                   <Row label="Moverse" value={reading.activeCalories != null ? `${fmt(reading.activeCalories)} kcal` : "no se ve"} />
+                  <Row label="Total" value={reading.totalCalories != null ? `${fmt(reading.totalCalories)} kcal` : "no se ve"} />
                   <Row label="Ejercicio" value={reading.exerciseMinutes != null ? `${reading.exerciseMinutes} min` : "—"} />
                   <Row label="Pasos" value={reading.steps != null ? fmt(reading.steps) : "—"} />
                 </dl>
@@ -232,9 +239,13 @@ function ScreenshotMode({ date }: { date: string }) {
         </div>
       ) : null}
 
-      {reading && reading.activeCalories == null && !loading ? (
+      {reading && (reading.activeCalories == null || reading.totalCalories == null) && !loading ? (
         <div className="space-y-2 rounded-2xl bg-field p-3 text-sm text-ink-2">
-          <p>No pude leer las kcal del anillo Moverse. Escríbelas abajo o intenta leerla con IA.</p>
+          <p>
+            {reading.activeCalories == null
+              ? "No pude leer las kcal del anillo Moverse. Escríbelas abajo o intenta leerla con IA."
+              : "No vi las calorías totales en la captura. Si aparecen, léela con IA o escríbelas abajo."}
+          </p>
           <Button variant="secondary" className="w-full" onClick={() => void readWithAi()}>
             <Sparkles className="size-5" /> Leer con IA
           </Button>
@@ -243,8 +254,18 @@ function ScreenshotMode({ date }: { date: string }) {
 
       {reading ? (
         <div className="space-y-3">
-          <Field label="Calorías activas a registrar">
+          <Field label="Calorías activas (Moverse)">
             <NumberInput value={kcal} onChange={(e) => setKcal(e.target.value)} placeholder="0" />
+          </Field>
+          <Field
+            label="Calorías totales del día (opcional)"
+            hint={
+              totalOk
+                ? "Activas + reposo, como las muestra Fitness. Déjalo vacío si no las ves."
+                : "El total no puede ser menor que las calorías activas."
+            }
+          >
+            <NumberInput value={totalKcal} onChange={(e) => setTotalKcal(e.target.value)} placeholder="0" />
           </Field>
           {existing?.active != null ? (
             <p className="text-xs text-muted">
@@ -252,7 +273,8 @@ function ScreenshotMode({ date }: { date: string }) {
             </p>
           ) : null}
           <Button className="w-full" disabled={!valid} onClick={save}>
-            {existing?.active != null ? "Actualizar" : "Guardar"} {valid ? `${fmt(calories)} kcal` : ""}
+            {existing?.active != null ? "Actualizar" : "Guardar"}{" "}
+            {valid ? `${fmt(calories)} activas${hasTotal ? ` · ${fmt(typedTotal)} total` : ""}` : ""}
           </Button>
         </div>
       ) : null}
