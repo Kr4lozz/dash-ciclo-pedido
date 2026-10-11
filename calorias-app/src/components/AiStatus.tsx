@@ -44,7 +44,7 @@ export function AiStatus() {
         disabled={state.phase === "running"}
       >
         {state.phase === "running" ? <LoaderCircle className="size-5 animate-spin" /> : null}
-        {state.phase === "running" ? "Probando… puede tardar hasta 40 s" : state.phase === "done" ? "Probar de nuevo" : "Probar ahora"}
+        {state.phase === "running" ? "Probando… puede tardar hasta 45 s" : state.phase === "done" ? "Probar de nuevo" : "Probar ahora"}
       </Button>
       {state.phase === "error" ? <p className="text-sm text-danger-text">{state.message}</p> : null}
       {state.phase === "done" ? <Report report={state.report} /> : null}
@@ -119,9 +119,21 @@ function Report({ report }: { report: Status }) {
         </details>
       ) : null}
 
+      {report.backupModels.map((m) => (
+        <details key={m.label} className="text-sm">
+          <summary className="cursor-pointer font-medium text-accent-text">
+            Modelos que ve tu llave de {m.label} ({m.ids.length})
+          </summary>
+          <p className="mt-2 break-words text-xs text-ink-2">{m.ids.join(" · ")}</p>
+          <p className="mt-1 text-xs text-muted">
+            Elige uno que acepte imágenes y ponlo en la variable {m.label.toUpperCase()}_MODEL de Vercel.
+          </p>
+        </details>
+      ))}
+
       <p className="text-xs text-muted">
         {report.fallbacks.length > 0
-          ? `IA de respaldo: ${report.fallbacks.join(", ")}.`
+          ? `IA de respaldo configurada: ${report.fallbacks.join(", ")}.`
           : "Sin IA de respaldo: si Gemini cae, el análisis falla. Se configura con GROQ_API_KEY, MISTRAL_API_KEY u OPENAI_API_KEY en Vercel."}{" "}
         Base de datos: {report.database.ok ? `bien (${seconds(report.database.ms)})` : "sin respuesta"}.
       </p>
@@ -141,7 +153,8 @@ function Chain({ chain }: { chain: ChainProbe }) {
   );
 }
 
-const describe = (a: Attempt) => `${a.model} ${a.status ?? "sin respuesta"}`;
+const describe = (a: Attempt) =>
+  `${a.model} ${a.status ?? a.reason.toLowerCase()}${a.ms >= 500 ? ` (${seconds(a.ms)})` : ""}`;
 
 function Line({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return (
