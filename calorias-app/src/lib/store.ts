@@ -8,6 +8,7 @@
 // useSyncExternalStore mantiene sincronizadas las pantallas.
 
 import { useSyncExternalStore } from "react";
+import { carryOver } from "./agenda";
 import { isValidDateStr, todayStr } from "./dates";
 import { defaultMacroPct, defaultProfile } from "./nutrition";
 import type { DataPut, DayDoc, ServerData } from "./schemas";
@@ -163,6 +164,7 @@ export function configureStore(next: StoreMode) {
     const raw = readJSON<unknown>(LOCAL_KEY);
     data = raw ? normalizeData(raw) : EMPTY;
     status = { ready: true, error: null };
+    rollOverTasks();
   } else if (next.kind === "user") {
     const raw = readJSON<unknown>(userKey(next.uid));
     data = raw ? normalizeData(raw) : EMPTY;
@@ -207,8 +209,21 @@ if (typeof window !== "undefined") {
     } else if (mode.kind === "user" && !flushing && Date.now() - lastPull > 60_000) {
       // Trae lo que se haya registrado desde otro dispositivo.
       void pullRemote();
+    } else if (mode.kind === "local") {
+      rollOverTasks();
     }
   });
+  armMidnight();
+}
+
+/** A medianoche lo pendiente del día que termina pasa al siguiente (con la app abierta). */
+function armMidnight() {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2);
+  setTimeout(() => {
+    rollOverTasks();
+    armMidnight();
+  }, next.getTime() - now.getTime());
 }
 
 // ---------- Cambios ----------
@@ -422,7 +437,8 @@ export function addTask(t: NewTask): Task | null {
 export function updateTask(id: string, patch: Partial<Pick<Task, "title" | "note" | "date" | "time">>) {
   const before = data.tasks.find((t) => t.id === id);
   if (!before) return;
-  const after = normalizeTask({ ...before, ...patch }) ?? before;
+  // Guardar los cambios con la fecha cuenta como haberla revisado: deja de verse «pasó de ayer».
+  const after = normalizeTask({ ...before, ...patch, ...("date" in patch ? { movedFrom: null } : {}) }) ?? before;
   update((d) => ({ ...d, tasks: d.tasks.map((t) => (t.id === id ? after : t)) }), { plan: true });
 }
 
@@ -434,6 +450,13 @@ export function toggleTask(id: string) {
   const after: Task = { ...before, done, doneAt: done ? Date.now() : null };
   update((d) => ({ ...d, tasks: d.tasks.map((t) => (t.id === id ? after : t)) }), { plan: true });
   if (done) trackAction("taskDone");
+}
+
+/** Lo que quedó pendiente en días anteriores pasa a hoy. */
+function rollOverTasks() {
+  if (mode.kind === "none") return;
+  if (!carryOver(data.tasks, todayStr())) return;
+  update((d) => ({ ...d, tasks: carryOver(d.tasks, todayStr()) ?? d.tasks }), { plan: true });
 }
 
 export function deleteTask(id: string) {
@@ -780,6 +803,7 @@ async function pullRemote() {
     persistData();
     status = { ready: true, error: null };
     emit();
+    rollOverTasks();
     if (pending.size > 0) scheduleFlush(0);
   } catch {
     if (mode.kind === "user" && mode.uid === uidAtStart && !status.ready) {
@@ -1119,6 +1143,7 @@ function normalizeTask(v: unknown): Task | null {
     time: typeof o.time === "string" && TIME_RE.test(o.time) ? o.time : null,
     done,
     doneAt: done ? (doneAt > 0 ? doneAt : Date.now()) : null,
+    movedFrom: isValidDateStr(o.movedFrom) ? o.movedFrom : null,
     createdAt: num(o.createdAt, Date.now()),
   };
 }

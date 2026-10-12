@@ -4,16 +4,16 @@ import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { CalendarCheck, Check, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Button, Card, PageHeader, Segmented, cx } from "@/components/ui";
-import { byTime, overdue, tasksOn, tomorrow, upcoming } from "@/lib/agenda";
+import { byTime, carried, tasksOn, tomorrow, upcoming } from "@/lib/agenda";
 import { addDays, dateLabel, isValidDateStr, longDate, todayStr } from "@/lib/dates";
-import { updateTask, toggleTask, useAppData } from "@/lib/store";
+import { toggleTask, useAppData } from "@/lib/store";
 import type { Task } from "@/lib/types";
 import { DayCalendar } from "./DayCalendar";
 import { TaskSheet, type TaskDraft } from "./TaskSheet";
 
 type View = "dia" | "proximos";
 
-const toDraft = (t: Task): TaskDraft => ({ id: t.id, title: t.title, date: t.date, time: t.time ?? "", note: t.note });
+const toDraft = (t: Task, focusDate = false): TaskDraft => ({ id: t.id, title: t.title, date: t.date, time: t.time ?? "", note: t.note, focusDate });
 
 /** Agenda: lo que quieres hacer cada día (con su hora), lo que ya hiciste y lo que dejas para más adelante. */
 export function AgendaScreen() {
@@ -23,6 +23,12 @@ export function AgendaScreen() {
   const fromLink = useSearchParams().get("fecha");
   const [date, setDate] = useState(isValidDateStr(fromLink) ? fromLink : today);
   const [draft, setDraft] = useState<TaskDraft | null>(null);
+  // Con la pantalla abierta pasa la medianoche: si se estaba viendo «hoy», se pasa al nuevo día.
+  const [seenToday, setSeenToday] = useState(today);
+  if (seenToday !== today) {
+    setSeenToday(today);
+    if (date === seenToday) setDate(today);
+  }
 
   const add = (d: string | null, time = "") => setDraft({ title: "", date: d, time, note: "" });
 
@@ -47,10 +53,10 @@ export function AgendaScreen() {
             tasks={data.tasks}
             onAdd={() => add(date)}
             onAddAt={(d, time) => add(d, time)}
-            onEdit={(t) => setDraft(toDraft(t))}
+            onEdit={(t, focusDate) => setDraft(toDraft(t, focusDate))}
           />
         ) : (
-          <UpcomingView today={today} tasks={data.tasks} onAdd={() => add(tomorrow(today))} onEdit={(t) => setDraft(toDraft(t))} />
+          <UpcomingView today={today} tasks={data.tasks} onAdd={() => add(tomorrow(today))} onEdit={(t, focusDate) => setDraft(toDraft(t, focusDate))} />
         )}
       </main>
       <TaskSheet draft={draft} onClose={() => setDraft(null)} routines={data.routines.map((r) => r.name)} />
@@ -73,12 +79,13 @@ function DayView({
   tasks: Task[];
   onAdd: () => void;
   onAddAt: (date: string, time: string) => void;
-  onEdit: (t: Task) => void;
+  /** abrir la actividad; con `focusDate` la hoja se abre en el campo de la fecha */
+  onEdit: (t: Task, focusDate?: boolean) => void;
 }) {
   const day = tasksOn(tasks, date);
   const pending = day.filter((t) => !t.done).sort(byTime);
   const done = day.filter((t) => t.done).sort((a, b) => (a.doneAt ?? 0) - (b.doneAt ?? 0));
-  const late = date === today ? overdue(tasks, today) : [];
+  const late = carried(tasks, date);
   const pct = day.length > 0 ? done.length / day.length : 0;
 
   return (
@@ -135,25 +142,13 @@ function DayView({
       ) : null}
 
       {late.length > 0 ? (
-        <details className="rounded-3xl bg-card p-4 ring-1 ring-border">
-          <summary className="cursor-pointer font-semibold">
-            Pendientes de días anteriores <span className="text-ink-2">({late.length})</span>
-          </summary>
-          <ul className="mt-1 divide-y divide-border">
-            {late.map((t) => (
-              <TaskRow key={t.id} task={t} onEdit={() => onEdit(t)} hint={t.date ? dateLabel(t.date) : ""}>
-                <button
-                  type="button"
-                  onClick={() => updateTask(t.id, { date: today })}
-                  className="shrink-0 text-sm font-semibold text-accent-text"
-                  aria-label={`Pasar ${t.title} a hoy`}
-                >
-                  Pasar a hoy
-                </button>
-              </TaskRow>
-            ))}
-          </ul>
-        </details>
+        <div role="status" className="rounded-3xl bg-accent-soft p-4 text-sm ring-1 ring-accent/40">
+          <p className="font-semibold">
+            {late.length === 1 ? "Pasó a este día 1 actividad" : `Pasaron a este día ${late.length} actividades`} que no
+            marcaste
+          </p>
+          <p className="text-ink-2">Cámbiales la fecha si prefieres hacerlas otro día, o márcalas cuando las cumplas.</p>
+        </div>
       ) : null}
 
       {day.length === 0 ? (
@@ -173,7 +168,7 @@ function DayView({
           <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-2">Por hacer</h2>
           <ul className="divide-y divide-border">
             {pending.map((t) => (
-              <TaskRow key={t.id} task={t} onEdit={() => onEdit(t)} />
+              <TaskRow key={t.id} task={t} onEdit={() => onEdit(t)} onReschedule={() => onEdit(t, true)} />
             ))}
           </ul>
         </Card>
@@ -195,7 +190,7 @@ function DayView({
   );
 }
 
-function UpcomingView({ today, tasks, onAdd, onEdit }: { today: string; tasks: Task[]; onAdd: () => void; onEdit: (t: Task) => void }) {
+function UpcomingView({ today, tasks, onAdd, onEdit }: { today: string; tasks: Task[]; onAdd: () => void; onEdit: (t: Task, focusDate?: boolean) => void }) {
   const groups = upcoming(tasks, today);
   return (
     <>
@@ -221,7 +216,7 @@ function UpcomingView({ today, tasks, onAdd, onEdit }: { today: string; tasks: T
             </h2>
             <ul className="divide-y divide-border">
               {g.tasks.map((t) => (
-                <TaskRow key={t.id} task={t} onEdit={() => onEdit(t)} />
+                <TaskRow key={t.id} task={t} onEdit={() => onEdit(t)} onReschedule={() => onEdit(t, true)} />
               ))}
             </ul>
           </Card>
@@ -234,15 +229,17 @@ function UpcomingView({ today, tasks, onAdd, onEdit }: { today: string; tasks: T
 function TaskRow({
   task,
   onEdit,
-  hint,
+  onReschedule,
   children,
 }: {
   task: Task;
   onEdit: () => void;
-  /** texto pequeño extra bajo el título (p. ej. de qué día es) */
-  hint?: string;
+  /** abre la actividad en la fecha (para las que pasaron solas de un día anterior) */
+  onReschedule?: () => void;
   children?: React.ReactNode;
 }) {
+  // Pendiente que pasó sola de un día anterior: se dice de cuándo venía y se ofrece cambiarle la fecha.
+  const from = !task.done && task.movedFrom ? `desde ${dateLabel(task.movedFrom).toLowerCase()}` : "";
   return (
     <li className="flex items-center gap-3 py-2">
       <button
@@ -259,10 +256,20 @@ function TaskRow({
       </button>
       <button type="button" onClick={onEdit} aria-label={`Editar ${task.title}`} className="min-w-0 flex-1 py-1 text-left">
         <span className={cx("block break-words font-medium", task.done && "text-muted line-through")}>{task.title}</span>
-        {task.note || hint ? (
-          <span className="block truncate text-xs text-muted">{[hint, task.note].filter(Boolean).join(" · ")}</span>
+        {task.note || from ? (
+          <span className="block truncate text-xs text-muted">{[from, task.note].filter(Boolean).join(" · ")}</span>
         ) : null}
       </button>
+      {from && onReschedule ? (
+        <button
+          type="button"
+          onClick={onReschedule}
+          aria-label={`Cambiar la fecha de ${task.title}`}
+          className="shrink-0 text-sm font-semibold text-accent-text"
+        >
+          Cambiar fecha
+        </button>
+      ) : null}
       {task.time ? (
         <span className="tabular shrink-0 rounded-full bg-field px-2.5 py-1 text-xs font-semibold text-ink-2">{task.time}</span>
       ) : null}

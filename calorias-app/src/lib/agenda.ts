@@ -9,12 +9,19 @@ export const byTime = (a: Task, b: Task) =>
 
 export const tasksOn = (tasks: Task[], date: string) => tasks.filter((t) => t.date === date);
 
-/** Pendientes de días anteriores (lo más viejo primero). */
-export function overdue(tasks: Task[], today: string): Task[] {
-  return tasks
-    .filter((t) => !t.done && t.date !== null && t.date < today)
-    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || byTime(a, b));
+/**
+ * Lo que no se hizo en un día pasa a hoy (guardando de qué día venía, para recordarlo y poder
+ * cambiarle la fecha). Devuelve la lista nueva, o null si no hay nada que pasar.
+ */
+export function carryOver(tasks: Task[], today: string): Task[] | null {
+  if (!tasks.some((t) => !t.done && t.date !== null && t.date < today)) return null;
+  return tasks.map((t) =>
+    !t.done && t.date !== null && t.date < today ? { ...t, date: today, movedFrom: t.movedFrom ?? t.date } : t,
+  );
 }
+
+/** Las de hoy que venían de un día anterior y siguen pendientes. */
+export const carried = (tasks: Task[], date: string) => tasks.filter((t) => t.date === date && !t.done && t.movedFrom !== null);
 
 export interface TaskGroup {
   /** null = sin fecha */

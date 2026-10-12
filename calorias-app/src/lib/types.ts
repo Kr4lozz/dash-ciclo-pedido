@@ -207,6 +207,8 @@ export interface Task {
   done: boolean;
   /** cuándo se marcó como hecha (ms) */
   doneAt: number | null;
+  /** Día en que estaba planeada originalmente, si no se hizo y pasó sola a un día siguiente; null si no. */
+  movedFrom: string | null;
   createdAt: number;
 }
 

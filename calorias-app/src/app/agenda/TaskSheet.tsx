@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarPlus, Clock, Trash2 } from "lucide-react";
 import { Sheet } from "@/components/Sheet";
 import { Button, Field, TextInput, buttonClass, inputClass, cx } from "@/components/ui";
@@ -18,6 +18,8 @@ export interface TaskDraft {
   /** HH:MM o vacío */
   time: string;
   note: string;
+  /** abrir con el cursor en la fecha (para reprogramar) */
+  focusDate?: boolean;
 }
 
 const IDEAS = ["Entrenar", "Caminar 30 min", "Estirar", "Tomar agua", "Medir mi peso", "Preparar la comida"];
@@ -44,6 +46,13 @@ function TaskForm({ draft, onClose, routines }: { draft: TaskDraft; onClose: () 
   const [date, setDate] = useState<string | null>(draft.date);
   const [time, setTime] = useState(draft.time);
   const [note, setNote] = useState(draft.note);
+  const dateRef = useRef<HTMLInputElement>(null);
+  // Al reprogramar, el cursor va a la fecha (cuando la hoja ya está abierta).
+  useEffect(() => {
+    if (!draft.focusDate) return;
+    const id = setTimeout(() => dateRef.current?.focus(), 80);
+    return () => clearTimeout(id);
+  }, [draft.focusDate]);
   const editing = draft.id !== undefined;
   const valid = title.trim().length > 0;
   const ics = editing && date ? icsUrl({ id: draft.id!, title: title.trim() || draft.title, note, date, time: time || null }) : null;
@@ -71,7 +80,7 @@ function TaskForm({ draft, onClose, routines }: { draft: TaskDraft; onClose: () 
           onChange={(e) => setTitle(e.target.value)}
           maxLength={100}
           placeholder="Ej. Entrenar pecho"
-          autoFocus
+          autoFocus={!draft.focusDate}
         />
       </Field>
       {!editing && !title ? (
@@ -92,6 +101,7 @@ function TaskForm({ draft, onClose, routines }: { draft: TaskDraft; onClose: () 
       <div className="space-y-2">
         <Field label="Fecha">
           <input
+            ref={dateRef}
             type="date"
             value={date ?? ""}
             disabled={date === null}

@@ -31,8 +31,9 @@ App personal (estilo Fitia) para registrar lo que comes con una foto y las calor
   - kcal manuales.
 - **Agenda** (pestaña Agenda, en lugar del antiguo Menú):
   - **Día:** lo que quieres hacer ese día, con su hora si la tienes (ordenado por hora), y lo que ya
-    hiciste (se marca con un toque); avance «2 de 4 hechas»; los pendientes de días anteriores se
-    pasan a hoy con un toque. Se puede ver cualquier fecha, también las futuras.
+    hiciste (se marca con un toque); avance «2 de 4 hechas». Lo que no marcas **pasa solo al día
+    siguiente** (al abrir la app, al sincronizar y a medianoche): se ve «desde ayer» con el botón
+    «Cambiar fecha» y un aviso en la Agenda. Se puede ver cualquier fecha, también las futuras.
   - **Calendario** (debajo de las actividades): **Horas** muestra el día con cada actividad en su
     hora (de 6:00 a 22:00, ampliado si hace falta, o las 24 horas; tocar una hora vacía crea ahí la
     actividad) y **Mes** muestra el mes con un punto en los días que tienen actividades (tocar un día
